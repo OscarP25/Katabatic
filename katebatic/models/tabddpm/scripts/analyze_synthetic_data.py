@@ -59,7 +59,6 @@ def load_synthetic_data(parent_dir, real_data_path=None):
     
     if X_cat_syn is not None:
         if cat_cols and len(cat_cols) == X_cat_syn.shape[1]:
-            # Use original column names if they match
             for i, col_name in enumerate(cat_cols):
                 all_columns.append(col_name)
                 all_data.append(X_cat_syn[:, i])
