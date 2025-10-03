@@ -44,11 +44,9 @@ def codi(csv_path: str,
         pd.DataFrame: Generated synthetic data 
     """
     
-    # Generate unique dataset name and logdir to avoid conflicts
     timestamp = int(time.time())
     dataset_name = f"temp_dataset_{timestamp}"
     
-    # Auto-generate unique logdir if not provided
     if logdir is None:
         logdir = f'./CoDi_exp_{timestamp}'
     
