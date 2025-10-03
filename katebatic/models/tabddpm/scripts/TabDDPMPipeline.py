@@ -28,7 +28,6 @@ class TabDDPMPipeline:
     _config_path: Optional[str] = field(default=None, init=False, repr=False)
     
     def __post_init__(self):
-        # Infer dataset_name if not supplied
         if not self.dataset_name:
             self.dataset_name = _stem_from_path(self.csv_path)
 
@@ -50,7 +49,6 @@ class TabDDPMPipeline:
             self.dataset_name, self.exp_name, "config.toml"
         )
 
-        # Load config for subsequent steps
         self._cfg = load_cfg(self._config_path)
         self._prepared = True
 
@@ -62,12 +60,10 @@ class TabDDPMPipeline:
     def sample(self, num_samples: int = 5000, batch_size: int = 1024) -> pd.DataFrame:
         self._ensure_prepared()
 
-        # Merge defaults with any user-provided sample_overrides
         so = {"num_samples": num_samples, "batch_size": batch_size}
 
         _ = run_sample(self._cfg, sample_overrides=so)
 
-        # Load synthetic data from the standard location
         syn_df = load_synthetic_data(
             parent_dir=self._cfg["parent_dir"],
             real_data_path=self._cfg["real_data_path"]
