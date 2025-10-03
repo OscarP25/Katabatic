@@ -159,7 +159,6 @@ def prepare_dataset_for_tabddpm(
             np.save(cat_path, X_cat_loaded.astype(object))
         print("Categorical features converted to object dtype")
     
-    # Create info.json with correct task_type
     info = {
         "name": dataset_name,
         "task_type": task_type,  # This will be 'binclass', 'multiclass', or 'regression'
@@ -174,10 +173,9 @@ def prepare_dataset_for_tabddpm(
         "target_column": target_column,
     }
     
-    # Add class information for classification
     if task_type in ['binclass', 'multiclass']:
         info["n_classes"] = num_classes
-        info["num_classes"] = num_classes  # Some parts of code expect this key
+        info["num_classes"] = num_classes  
     else:
         info["n_classes"] = 0
         info["num_classes"] = 0
@@ -195,7 +193,6 @@ def prepare_dataset_for_tabddpm(
     
     generate_catboost_params(dataset_name)
     
-    # return info
     return {
         "info": info,
         "real_data_path": data_path.as_posix(),
@@ -299,7 +296,6 @@ def generate_catboost_params(dataset_name):
         "cat_features": cat_features
     }
     
-    # Create tuned_models directory
     tuned_dir = Path('katebatic/models/tabddpm/tuned_models/catboost')
     tuned_dir.mkdir(parents=True, exist_ok=True)
     
