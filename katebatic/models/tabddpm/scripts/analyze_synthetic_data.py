@@ -39,7 +39,6 @@ def load_synthetic_data(parent_dir, real_data_path=None):
         print(f"  Target column: {target_col}")
     else:
         print("\nWarning: info.json not found, using generic column names")
-        # Use generic column names if info.json not available
         num_cols = []
         cat_cols = []
         target_col = "target"
