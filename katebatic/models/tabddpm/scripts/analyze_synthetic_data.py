@@ -47,7 +47,6 @@ def load_synthetic_data(parent_dir, real_data_path=None):
     all_columns = []
     all_data = []
     
-    # Add numerical columns
     if X_num_syn is not None:
         if num_cols and len(num_cols) == X_num_syn.shape[1]:
             for i, col_name in enumerate(num_cols):
@@ -66,7 +65,6 @@ def load_synthetic_data(parent_dir, real_data_path=None):
                 all_columns.append(col_name)
                 all_data.append(X_cat_syn[:, i])
         else:
-            # Fall back to generic names
             print(f"Warning: Expected {X_cat_syn.shape[1]} categorical columns but found {len(cat_cols)} names. Using generic names.")
             for i in range(X_cat_syn.shape[1]):
                 all_columns.append(f"cat_{i}")
