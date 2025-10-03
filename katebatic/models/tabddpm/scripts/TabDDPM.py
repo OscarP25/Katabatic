@@ -15,7 +15,6 @@ from .eval_mlp import train_mlp
 from .eval_simple import train_simple
 
 
-# ---------- helpers ----------
 def _pick_device(cfg):
     if "device" in cfg:
         return torch.device(cfg["device"])
@@ -29,21 +28,16 @@ def _copy(src, dst):
         pass
 
 def load_cfg(config_path: str):
-    """Load TOML config via your lib.load_config."""
     return lib.load_config(config_path)
 
 def _maybe_copy_side_files(cfg, config_path):
-    # Save an immutable copy of the config next to outputs
     _copy(config_path, os.path.join(cfg["parent_dir"], "config.toml"))
     # Save info.json alongside outputs (matches your pipeline.py behavior)
     _copy(os.path.join(cfg["real_data_path"], "info.json"),
           os.path.join(cfg["parent_dir"], "info.json"))
 
 
-# ---------- runners ----------
 def run_train(cfg: dict, change_val: bool = False, device=None, main_overrides: Optional[Dict[str, Any]] = None):
-    """Run training and return whatever train() returns + timing."""
-    
     main_args = dict(cfg["train"]["main"])  
     if main_overrides:
         main_args.update(main_overrides)
@@ -74,7 +68,6 @@ def run_sample(
     T_overrides: Optional[Dict[str, Any]] = None,
 ):
 
-    # ---- merge args (non-destructive) ----
     sample_args = dict(cfg["sample"])
     if sample_overrides:
         sample_args.update(sample_overrides)
@@ -112,7 +105,6 @@ def run_sample(
     return {"result": out, "elapsed_sec": time.perf_counter() - t0, "device": str(device)}
 
 def run_eval(cfg: dict, change_val: bool = False, device=None):
-    """Run eval (catboost/mlp/simple) and return its result + timing."""
     device = device or _pick_device(cfg)
     t0 = time.perf_counter()
     eval_model = cfg["eval"]["type"]["eval_model"]
