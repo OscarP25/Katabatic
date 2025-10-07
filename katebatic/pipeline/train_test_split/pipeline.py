@@ -32,17 +32,24 @@ class TrainTestSplitPipeline(Pipeline):
             raise ValueError(
                 "Both 'input_csv' and 'output_dir' must be provided.")
 
+        print("Starting train-test split pipeline...")
+
         split_dataset(input_csv, output_dir, *args, **kwargs)
 
+        print("Train-test split completed. Proceeding to model training...")
+
         current_model.train(output_dir, *args, **kwargs)
+
+        print("Model training completed. Proceeding to evaluations...")
 
         for evaluation in self._evaluations:
             eval_instance = evaluation(*args, **kwargs)
             eval_instance.evaluate()
+
+        print("All evaluations completed.")
 
         # Implement the specific logic for version 1 pipeline here
         return "Train test split pipeline executed successfully."
 
     def __repr__(self):
         return f"TrainTestSplitPipeline(name={self.model})"
- 
