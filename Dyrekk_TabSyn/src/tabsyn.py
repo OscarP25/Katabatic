@@ -29,13 +29,13 @@ class TabSyn(Model):
         self,
         epochs_vae: int = 100,             
         epochs_diffusion: int = 100,     
-        batch_size: int = 64,             
+        batch_size: int = 512,             
         vae_lr: float = 1e-3,              
-        diffusion_lr: float = 1e-3,       
+        diffusion_lr: float = 2e-3,       
         device: str = None,
         # VAE Hyperparameters
         d_token: int = 32,               
-        n_layers_vae: int = 3,  
+        n_layers_vae: int = 4,  
         hid_dim_vae: int = 64,             
         # Diffusion Hyperparameters
         num_timesteps: int = 1000,
