@@ -16,15 +16,15 @@ class PateGan(Model):
     def __init__(
         self,
         delta: float = 1e-5,
-        epsilon: float = 5.0,
+        epsilon: float = 1.0,
         batch_size: int = 128,
         max_iterations: int = 100000,
         lr: float = 1e-3,
         latent_dim: int = 64,
-        n_teachers: int = 15,
+        n_teachers: int = 7,
         n_teacher_iters: int = 50,
         n_student_iters: int = 10,
-        noise_lambda: float = 10.0,
+        noise_lambda: float = 12.0,
         embed_dim: int = 16,
         hidden_dim: int = 64,
         device: str = None,
@@ -65,27 +65,16 @@ class PateGan(Model):
         self.is_fitted = False
 
     def _preprocess_data(self, df: pd.DataFrame) -> torch.Tensor:
-        """
-        Data is already label-encoded. Just convert to tensor.
-        Returns: LongTensor of shape (n_samples, n_features) with category indices.
-        """
-        # Assume data is already integer-encoded
-        X = df.values.astype(np.int64)  # (n_samples, n_features)
-        
-        # Determine number of categories per feature
+        X = df.values.astype(np.int64)
         self.cat_dims = []
         for col in df.columns:
             n_cats = int(df[col].max()) + 1
             self.cat_dims.append(n_cats)
-        
-        # NEW: Calculate class weights for the target column
         if self.use_class_weights:
             target_idx = df.columns.get_loc(self._target_col)
             n_classes = self.cat_dims[target_idx]
             class_counts = df[self._target_col].value_counts().sort_index()
             total = len(df)
-            
-            # Inverse frequency weighting
             self.class_weights = torch.FloatTensor([
                 total / (n_classes * max(class_counts.get(i, 1), 1)) 
                 for i in range(n_classes)
@@ -97,17 +86,9 @@ class PateGan(Model):
         return torch.LongTensor(X).to(self.device)
 
     def _postprocess_data(self, tensor: torch.Tensor) -> pd.DataFrame:
-        """
-        Convert tensor back to DataFrame with integer codes.
-        tensor: LongTensor of shape (n_samples, n_features)
-        """
         data = tensor.cpu().numpy()
-        
-        # Clamp to valid category ranges
         for i in range(data.shape[1]):
             data[:, i] = np.clip(data[:, i], 0, self.cat_dims[i] - 1)
-        
-        # Create DataFrame with original column names
         df_dict = {}
         for i, col in enumerate(self._train_df.columns):
             df_dict[col] = data[:, i].astype(int)
@@ -115,7 +96,6 @@ class PateGan(Model):
         return pd.DataFrame(df_dict)
 
     def partition_data(self, data: torch.Tensor):
-        """Partition data into disjoint subsets for teachers"""
         n = len(data)
         idx = torch.randperm(n)
         data = data[idx]
@@ -132,27 +112,17 @@ class PateGan(Model):
                 vote = (torch.sigmoid(logits) > 0.5).float().squeeze(-1)
                 votes.append(vote)
             
-            votes = torch.stack(votes, dim=0)  # (n_teachers, batch)
-            
-            # Count votes for each class
-            n1 = votes.sum(dim=0)  # votes for class 1, shape (batch,)
-            n0 = self.n_teachers - n1  # votes for class 0
-        
-        # Step 2: Add Laplace(λ) noise
+            votes = torch.stack(votes, dim=0)
+            n1 = votes.sum(dim=0)
+            n0 = self.n_teachers - n1 
         laplace_dist = torch.distributions.Laplace(
             loc=0.0,
             scale=self.noise_lambda
         )
         noise = laplace_dist.sample((batch_size,)).to(self.device)
-        
-        # Add noise to counts
         noisy_n1 = n1 + noise
         noisy_n0 = n0 - noise
-        
-        # Step 3: Argmax to get noisy label
-        labels = (noisy_n1 > noisy_n0).float().unsqueeze(1)  # (batch, 1)
-        
-        # Step 4: Update privacy accountant
+        labels = (noisy_n1 > noisy_n0).float().unsqueeze(1) 
         self._update_privacy_accountant(n0, n1)
         self.queries_made += 1
         
@@ -161,8 +131,6 @@ class PateGan(Model):
     def _update_privacy_accountant(self, n0: torch.Tensor, n1: torch.Tensor):
         if self.alpha_accum is None:
             self.alpha_accum = torch.zeros(100, device=self.device)
-        
-        # Compute vote difference across batch
         diff = torch.abs(n0 - n1).float()
         
         mean_diff = diff.mean().item()
@@ -170,18 +138,13 @@ class PateGan(Model):
         if self.noise_lambda * mean_diff > 50.0:
             mean_diff = 50.0 / self.noise_lambda
         
-        # Compute q
         numerator = 2.0 + self.noise_lambda * mean_diff
         denominator = 4.0 * np.exp(self.noise_lambda * mean_diff)
         q = numerator / denominator
         q = np.clip(q, 1e-12, 0.5)
-        
-        # Update alpha for each l
+
         for l in range(1, 101):
-            # Term 1: 2λ²l(l+1)
             term1 = 2.0 * (self.noise_lambda ** 2) * l * (l + 1)
-            
-            # Term 2: log((1-q)^a + q·e^(2λl))
             exp_2lambda = np.exp(2.0 * self.noise_lambda)
             denom = 1.0 - exp_2lambda * q
             
@@ -209,9 +172,6 @@ class PateGan(Model):
             self.alpha_accum[l-1] += increment
 
     def get_current_epsilon(self) -> float:
-        """
-        Compute current epsilon using basic composition.
-        """
         if self.alpha_accum is None or self.queries_made == 0:
             return 0.0
         
@@ -249,22 +209,19 @@ class PateGan(Model):
             for _ in range(self.n_teachers)
         ]
         
-        # Partition data
         self.partitions = self.partition_data(X)
         
-        # Optimizers
+        
         g_opt = optim.Adam(self.generator.parameters(), lr=self.lr, betas=(0.5, 0.999))
         s_opt = optim.Adam(self.student.parameters(), lr=self.lr, betas=(0.5, 0.999))
         t_opts = [optim.Adam(t.parameters(), lr=self.lr, betas=(0.5, 0.999)) for t in self.teachers]
 
-        # Reset privacy accounting
         self.alpha_accum = None
         self.queries_made = 0
 
         print(f"[PATE-GAN] Training | ε_target={self.target_epsilon} | λ={self.noise_lambda} | Teachers={self.n_teachers} | Weighted={self.use_class_weights}")
 
         for it in range(self.max_iterations):
-            # Train teachers
             for _ in range(self.n_teacher_iters):
                 z = torch.randn(self.batch_size, self.latent_dim, device=self.device)
                 fake = self.generator(z).detach()
@@ -296,12 +253,12 @@ class PateGan(Model):
                         
                         loss = loss_real + loss_fake
                     else:
-                        # Standard unweighted loss
                         loss = nn.BCEWithLogitsLoss()(real_pred, torch.ones_like(real_pred)) + \
                                nn.BCEWithLogitsLoss()(fake_pred, torch.zeros_like(fake_pred))
                     
                     loss.backward()
                     opt.step()
+
 
             z = torch.randn(self.batch_size, self.latent_dim, device=self.device)
             fake = self.generator(z).detach()
@@ -314,7 +271,6 @@ class PateGan(Model):
                 loss.backward()
                 s_opt.step()
 
-            # Train generator
             z = torch.randn(self.batch_size, self.latent_dim, device=self.device)
             fake = self.generator(z)
             
@@ -324,7 +280,7 @@ class PateGan(Model):
             g_opt.step()
 
             
-            if it % 20 == 0:
+            if it % 10 == 0:
                 eps = self.get_current_epsilon()
                 print(f"Iter {it:5d} | ε ≈ {eps:.4f}")
 
@@ -335,22 +291,12 @@ class PateGan(Model):
 
         self.is_fitted = True
         
-        # Generate synthetic data
         if kwargs.get('auto_generate_synthetic', True) and kwargs.get('synthetic_dir'):
             self.sample(num_samples=len(df), synthetic_dir=kwargs['synthetic_dir'])
 
         return self
 
     def sample(self, num_samples: int, synthetic_dir: str = None, oversample_minority: bool = True, min_samples_per_class: int = None, **kwargs) -> pd.DataFrame:
-        """
-        Generate synthetic samples with optional minority class oversampling.
-        
-        Args:
-            num_samples: Total number of samples to generate
-            synthetic_dir: Directory to save synthetic data
-            oversample_minority: If True, ensure minimum representation of minority classes
-            min_samples_per_class: Minimum samples per class (default: num_samples // (n_classes * 10))
-        """
         if not self.is_fitted:
             raise RuntimeError("Model must be trained first")
 
