@@ -21,10 +21,6 @@ from diffusion import Diffusion
 
 
 class TabSyn(Model):
-    """
-    TabSyn: Tabular Data Synthesis with Score-based Diffusion in Latent Space.
-    """
-
     def __init__(
         self,
         epochs_vae: int = 100,             
@@ -33,15 +29,12 @@ class TabSyn(Model):
         vae_lr: float = 1e-3,              
         diffusion_lr: float = 2e-3,       
         device: str = None,
-        # VAE Hyperparameters
         d_token: int = 32,               
         n_layers_vae: int = 4,  
         hid_dim_vae: int = 64,             
-        # Diffusion Hyperparameters
         num_timesteps: int = 1000,
-        # Loss balancing
-        cat_loss_weight: float = 2.0,  # Weight for categorical loss
-        num_loss_weight: float = 1.0,  # Weight for numerical loss
+        cat_loss_weight: float = 2.0,  
+        num_loss_weight: float = 1.0, 
         **kwargs
     ):
         super().__init__()
@@ -52,7 +45,7 @@ class TabSyn(Model):
         self.diffusion_lr = diffusion_lr
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Architecture Configs
+        #architecture
         self.d_token = d_token
         self.n_layers_vae = n_layers_vae
         self.hid_dim_vae = hid_dim_vae
@@ -60,7 +53,7 @@ class TabSyn(Model):
         self.cat_loss_weight = cat_loss_weight
         self.num_loss_weight = num_loss_weight
         
-        # State
+        #state
         self.vae = None
         self.diffusion = None
         self.transformers = {}
@@ -70,35 +63,27 @@ class TabSyn(Model):
         self.info = {} 
         self.latent_shape = None 
         self.is_fitted = False
-        
-        # Store statistics for better sampling
         self.num_means = None
         self.num_stds = None
 
     def get_required_dependencies(self) -> list[str]:
         return ["torch", "sklearn", "pandas", "numpy", "tqdm"]
 
-    def _preprocess_data(self, df: pd.DataFrame) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Preprocess data for VAE/Diffusion training.
-        """
+    def _preprocess_data(
+            self, 
+            df: pd.DataFrame
+            ) -> Tuple[torch.Tensor, torch.Tensor]:
         X_num = df[self.num_cols].copy()
         X_cat = df[self.cat_cols].copy()
 
         if not X_num.empty:
             num_imputer = SimpleImputer(strategy='mean')
             X_num_imputed = num_imputer.fit_transform(X_num)
-            
-            # Store original statistics
             self.num_means = np.mean(X_num_imputed, axis=0)
             self.num_stds = np.std(X_num_imputed, axis=0) + 1e-6
-            
-            # Use StandardScaler first, then QuantileTransformer
             scaler = StandardScaler()
             X_num_scaled = scaler.fit_transform(X_num_imputed)
             self.transformers['scaler'] = scaler
-            
-            # QuantileTransformer for better normalization
             self.transformers['num'] = QuantileTransformer(
                 output_distribution='normal',
                 n_quantiles=min(1000, len(X_num_imputed))
@@ -112,10 +97,7 @@ class TabSyn(Model):
         self.categories_list = []
         
         if not X_cat.empty:
-            # Categorical columns are already encoded as integers
             X_cat = X_cat.fillna(0).astype(int)
-            
-            # Get number of categories per column
             for col in self.cat_cols:
                 n_categories = int(X_cat[col].max()) + 1
                 self.categories_list.append(n_categories)
@@ -124,12 +106,10 @@ class TabSyn(Model):
 
         return X_num_tensor, X_cat_tensor
 
-    def train(self, output_dir: str, *args, **kwargs) -> 'TabSyn':
-        """
-        Train the TabSyn model in two phases:
-        1. Train VAE to learn latent representations
-        2. Train Diffusion model in the latent space
-        """
+    def train(
+            self,
+            output_dir: str, *args, **kwargs
+            ) -> 'TabSyn':
         self.check_dependencies()
         train_csv_path = os.path.join(output_dir, "train_full.csv")
         
@@ -141,8 +121,6 @@ class TabSyn(Model):
         self.info['columns'] = df.columns.tolist()
         target_col = df.columns[-1]
         self._target_col = target_col
-
-        # Identify categorical columns (including target)
         cat_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
 
         for col in df.columns:
@@ -253,7 +231,6 @@ class TabSyn(Model):
                         )
                     epoch_cat_loss += cat_loss.item()
                 
-                # Total reconstruction loss with balancing
                 recon_loss = self.num_loss_weight * num_loss + self.cat_loss_weight * cat_loss
                 
                 if recon_loss == 0:
@@ -320,8 +297,6 @@ class TabSyn(Model):
         
         latents = torch.cat(all_latents, dim=0)
         self.latent_shape = mu_z[:, 1:, :].shape[1:]
-        
-        # Standardize latents for better diffusion training
         latent_mean = latents.mean(dim=0, keepdim=True)
         latent_std = latents.std(dim=0, keepdim=True) + 1e-6
         latents = (latents - latent_mean) / latent_std
@@ -343,7 +318,10 @@ class TabSyn(Model):
         )
         
         s = 0.008
-        steps = torch.linspace(0, self.num_timesteps, self.num_timesteps + 1, device=self.device)
+        steps = torch.linspace(0, 
+                               self.num_timesteps, 
+                               self.num_timesteps + 1, 
+                               device=self.device)
         alpha_bar = torch.cos(((steps / self.num_timesteps) + s) / (1 + s) * np.pi * 0.5) ** 2
         alpha_bar = alpha_bar / alpha_bar[0]
         
@@ -362,7 +340,6 @@ class TabSyn(Model):
             weight_decay=1e-6
         )
         
-        # Cosine scheduler for diffusion
         diff_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             diffusion_optimizer,
             T_max=self.epochs_diffusion,
@@ -408,48 +385,38 @@ class TabSyn(Model):
 
         return self
 
-    def sample(self, num_samples: int, *args, **kwargs) -> pd.DataFrame:
-        """
-        Generate synthetic samples using the trained TabSyn model.
-        """
+    def sample(
+            self, 
+            num_samples: int, 
+            *args, **kwargs
+            ) -> pd.DataFrame:
         if not self.is_fitted:
             raise RuntimeError("Model must be trained before sampling.")
 
         print(f"[TabSyn] Sampling {num_samples} rows...")
         
-        # Generate latent codes via diffusion
         with torch.no_grad():
             z_flat_gen = self.diffusion.sample(num_samples)
             
-            # Denormalize latents
             z_flat_gen = z_flat_gen * self.latent_std + self.latent_mean
         
         z_gen = z_flat_gen.reshape(num_samples, *self.latent_shape)
-        
-        # Decode latents to data space
+
         self.vae.eval()
         with torch.no_grad():
             h = self.vae.VAE.decoder(z_gen)
             recon_num, recon_cat_logits = self.vae.Reconstructor(h)
-            
-            # Handle numerical outputs
             if recon_num is not None:
-                # Clip extreme values
                 recon_num = torch.clamp(recon_num, -5, 5)
-        
-        # Process numerical features
         if self.num_cols:
             X_num_np = recon_num.cpu().numpy()
-            
-            # Inverse transform with both transformers
+
             try:
                 X_num_inv = self.transformers['num'].inverse_transform(X_num_np)
                 X_num_inv = self.transformers['scaler'].inverse_transform(X_num_inv)
             except Exception as e:
                 print(f"[WARNING] Inverse transform failed: {e}")
                 X_num_inv = X_num_np
-            
-            # Handle any NaNs
             if np.isnan(X_num_inv).any():
                 for i in range(X_num_inv.shape[1]):
                     col_mask = np.isnan(X_num_inv[:, i])
@@ -479,16 +446,11 @@ class TabSyn(Model):
                     indices = torch.multinomial(probs, num_samples=1).squeeze(-1)
                 except RuntimeError:
                     indices = torch.argmax(probs, dim=-1)
-                
-                # Ensure indices are valid
                 indices = torch.clamp(indices, 0, num_classes - 1)
                 df_cat[col] = indices.cpu().numpy()
-
-        # Combine numerical and categorical
         df_synth = pd.concat([df_num, df_cat], axis=1)
         df_synth = df_synth[self.info['columns']]
         
-        # Check target distribution
         target_col = df_synth.columns[-1]
         if target_col in df_cat.columns:
             print(f"\n[TabSyn] Target column '{target_col}' distribution:")
@@ -497,7 +459,6 @@ class TabSyn(Model):
             print(f"  Synthetic: {synth_dist}")
             print(f"  Original:  {orig_dist}")
         
-        # Handle any remaining NaNs
         for col in df_synth.columns:
             if df_synth[col].isna().any():
                 if col in self.num_cols:
@@ -505,7 +466,6 @@ class TabSyn(Model):
                 else:
                     df_synth[col].fillna(df_synth[col].mode()[0] if not df_synth[col].mode().empty else 0, inplace=True)
         
-        # Save to disk
         synthetic_dir = kwargs.get("synthetic_dir")
         if synthetic_dir:
             os.makedirs(synthetic_dir, exist_ok=True)
@@ -514,7 +474,6 @@ class TabSyn(Model):
             X_synth = df_synth.drop(columns=[target_col])
             Y_synth = df_synth[[target_col]]
 
-            # Fallback for collapsed target distribution
             if Y_synth[target_col].nunique() <= 1 and hasattr(self, '_train_df') and self._train_df is not None:
                 print("[WARNING] Target collapsed to single class, resampling from original")
                 orig_y = self._train_df[target_col]

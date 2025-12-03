@@ -9,7 +9,13 @@ import typing as ty
 import math
 
 class Tokenizer(nn.Module):
-    def __init__(self, d_numerical, categories, d_token, bias):
+    def __init__(
+            self,
+            d_numerical,
+            categories,
+            d_token,
+            bias
+            ):
         super().__init__()
         if categories is None:
             d_bias = d_numerical
@@ -71,7 +77,13 @@ class Tokenizer(nn.Module):
 
 
 class MultiheadAttention(nn.Module):
-    def __init__(self, d, n_heads, dropout, initialization='kaiming'):
+    def __init__(
+            self,
+            d,
+            n_heads,
+            dropout,
+            initialization='kaiming'
+            ):
         if n_heads > 1:
             assert d % n_heads == 0
         assert initialization in ['xavier', 'kaiming']
@@ -100,7 +112,13 @@ class MultiheadAttention(nn.Module):
             .reshape(batch_size * self.n_heads, n_tokens, d_head)
         )
 
-    def forward(self, x_q, x_kv, key_compression=None, value_compression=None):
+    def forward(
+            self,
+            x_q,
+            x_kv,
+            key_compression=None,
+            value_compression=None
+            ):
         q, k, v = self.W_q(x_q), self.W_k(x_kv), self.W_v(x_kv)
         for tensor in [q, k, v]:
             assert tensor.shape[-1] % self.n_heads == 0
@@ -137,19 +155,19 @@ class MultiheadAttention(nn.Module):
 
 class Transformer(nn.Module):
     def __init__(
-        self,
-        n_layers: int,
-        d_token: int,
-        n_heads: int,
-        d_out: int,
-        d_ffn_factor: int,
-        attention_dropout=0.1, 
-        ffn_dropout=0.1,
-        residual_dropout=0.1,
-        activation='relu',
-        prenormalization=True,
-        initialization='kaiming',
-    ):
+            self,
+            n_layers: int,
+            d_token: int,
+            n_heads: int,
+            d_out: int,
+            d_ffn_factor: int,
+            attention_dropout=0.1,
+            ffn_dropout=0.1,
+            residual_dropout=0.1,
+            activation='relu',
+            prenormalization=True,
+            initialization='kaiming'
+            ):
         super().__init__()
 
         def make_normalization():
@@ -188,7 +206,13 @@ class Transformer(nn.Module):
                 x_residual = layer[norm_key](x_residual)
         return x_residual
 
-    def _end_residual(self, x, x_residual, layer, norm_idx):
+    def _end_residual(
+            self,
+            x,
+            x_residual,
+            layer,
+            norm_idx
+            ):
         if self.residual_dropout:
             x_residual = F.dropout(x_residual, self.residual_dropout, self.training)
         x = x + x_residual
@@ -216,7 +240,16 @@ class Transformer(nn.Module):
 
 
 class VAE(nn.Module):
-    def __init__(self, d_numerical, categories, num_layers, hid_dim, n_head=1, factor=4, bias=True):
+    def __init__(
+            self,
+            d_numerical,
+            categories,
+            num_layers,
+            hid_dim,
+            n_head=1,
+            factor=4,
+            bias=True
+            ):
         super(VAE, self).__init__()
 
         self.d_numerical = d_numerical
@@ -240,25 +273,22 @@ class VAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x_num, x_cat):
-        # Tokenize input
         x = self.Tokenizer(x_num, x_cat)
         x = x.contiguous()
-
-        # Encode
         mu_z = self.encoder_mu(x)
         logvar_z = self.encoder_logvar(x)
-
-        # Reparameterize
         z = self.reparameterize(mu_z, logvar_z)
-
-        # Decode (skip [CLS] token)
         h = self.decoder(z[:, 1:])
-
         return h, mu_z, logvar_z
 
 
 class Reconstructor(nn.Module):
-    def __init__(self, d_numerical, categories, d_token):
+    def __init__(
+            self,
+            d_numerical,
+            categories,
+            d_token
+            ):
         super().__init__()
         self.d_numerical = d_numerical
         self.d_token = d_token
@@ -284,21 +314,14 @@ class Reconstructor(nn.Module):
                 )
 
     def forward(self, h):
-        """
-        h: (batch, n_features, d_token)
-        """
         recon_x_num = None
         recon_x_cat = []
-        
-        # Reconstruct numerical features
         if len(self.num_recons) > 0:
             h_num = h[:, :self.d_numerical, :]
             num_outputs = []
             for i, recon in enumerate(self.num_recons):
                 num_outputs.append(recon(h_num[:, i, :]))
             recon_x_num = torch.cat(num_outputs, dim=-1)
-        
-        # Reconstruct categorical features
         if self.categories is not None and len(self.categories) > 0:
             h_cat = h[:, self.d_numerical:, :]
             for i, recon in enumerate(self.cat_recons):
@@ -308,10 +331,27 @@ class Reconstructor(nn.Module):
 
 
 class Model_VAE(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head=1, factor=4, bias=True):
+    def __init__(
+            self, 
+            num_layers, 
+            d_numerical, 
+            categories, 
+            d_token, 
+            n_head=1, 
+            factor=4, 
+            bias=True
+            ):
         super(Model_VAE, self).__init__()
 
-        self.VAE = VAE(d_numerical, categories, num_layers, d_token, n_head=n_head, factor=factor, bias=bias)
+        self.VAE = VAE(
+            d_numerical, 
+            categories, 
+            num_layers, 
+            d_token, 
+            n_head=n_head, 
+            factor=factor, 
+            bias=bias
+            )
         self.Reconstructor = Reconstructor(d_numerical, categories, d_token)
 
     def forward(self, x_num, x_cat):
@@ -321,7 +361,16 @@ class Model_VAE(nn.Module):
 
 
 class Encoder_model(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias=True):
+    def __init__(
+            self,
+            num_layers,
+            d_numerical,
+            categories,
+            d_token,
+            n_head,
+            factor,
+            bias=True
+            ):
         super(Encoder_model, self).__init__()
         self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias)
         self.VAE_Encoder = Transformer(num_layers, d_token, n_head, d_token, factor)
@@ -337,7 +386,16 @@ class Encoder_model(nn.Module):
 
 
 class Decoder_model(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias=True):
+    def __init__(
+            self,
+            num_layers,
+            d_numerical,
+            categories,
+            d_token,
+            n_head,
+            factor,
+            bias=True
+            ):
         super(Decoder_model, self).__init__()
         self.VAE_Decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.Detokenizer = Reconstructor(d_numerical, categories, d_token)
@@ -357,7 +415,17 @@ class ConditionalVAE(nn.Module):
     Conditional VAE that takes class labels as conditioning input.
     This naturally learns class-specific distributions.
     """
-    def __init__(self, d_numerical, categories, num_layers, hid_dim, n_classes, n_head=1, factor=4, bias=True):
+    def __init__(
+            self,
+            d_numerical,
+            categories,
+            num_layers,
+            hid_dim,
+            n_classes,
+            n_head=1,
+            factor=4,
+            bias=True
+            ):
         super(ConditionalVAE, self).__init__()
 
         self.d_numerical = d_numerical
@@ -384,7 +452,12 @@ class ConditionalVAE(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x_num, x_cat, y_class):
+    def forward(
+            self,
+            x_num,
+            x_cat,
+            y_class
+            ):
         """
         x_num: numerical features
         x_cat: categorical features  
@@ -413,13 +486,28 @@ class ConditionalVAE(nn.Module):
 
 class Model_ConditionalVAE(nn.Module):
     """Wrapper for conditional VAE with reconstructor"""
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_classes, n_head=1, factor=4, bias=True):
+    def __init__(
+            self,
+            num_layers,
+            d_numerical,
+            categories,
+            d_token,
+            n_classes,
+            n_head=1,
+            factor=4,
+            bias=True
+            ):
         super(Model_ConditionalVAE, self).__init__()
 
         self.VAE = ConditionalVAE(d_numerical, categories, num_layers, d_token, n_classes, n_head=n_head, factor=factor, bias=bias)
         self.Reconstructor = Reconstructor(d_numerical, categories, d_token)
 
-    def forward(self, x_num, x_cat, y_class):
+    def forward(
+            self,
+            x_num,
+            x_cat,
+            y_class
+            ):
         h, mu_z, logvar_z = self.VAE(x_num, x_cat, y_class)
         recon_x_num, recon_x_cat = self.Reconstructor(h)
         return recon_x_num, recon_x_cat, mu_z, logvar_z

@@ -100,46 +100,20 @@ class GaussianDiffusion:
         if t[0] == 0:
             return mean
         else:
-            # Add noise
             noise = torch.randn_like(x_t)
-            # Use fixed variance (can be learned as in Improved DDPM)
             variance = betas_t
             return mean + torch.sqrt(variance) * noise
     
     def _extract(self, a, t, x_shape):
-        """Extract coefficients at specified timesteps and reshape for broadcasting"""
         batch_size = t.shape[0]
         out = a.to(t.device).gather(0, t)
         return out.reshape(batch_size, *((1,) * (len(x_shape) - 1)))
-    
-    # In multinomial_diffusion.py
 
-# ...
-    def compute_loss(self, x_0_pred, x_0_true, x_t, t):
-        """
-        Compute the full KL divergence loss (L_t) between the true and predicted reverse distributions.
+    def compute_loss(self, model, x_0, t, y=None):
+        noise = torch.randn_like(x_0)
+        x_t = self.q_sample(x_0, t, noise)
         
-        Args:
-            x_0_pred: Predicted x_0 (normalized probabilities) from model: P(x_0 | x_t)
-            x_0_true: True x_0 (one-hot): P(x_0)
-            x_t: Noised x_t (one-hot)
-            t: Timestep
-            
-        Returns:
-            Mean KL Divergence loss for the batch
-        """
-        log_q_posterior = torch.log(self.q_posterior(x_t, x_0_true, t) + 1e-10)
-
-        log_p_theta = torch.log(self.q_posterior(x_t, x_0_pred, t) + 1e-10)
-
-        kl_loss = (self.q_posterior(x_t, x_0_true, t) * (log_q_posterior - log_p_theta)).sum(dim=-1)
+        predicted_noise = model(x_t, t, y)
         
-        kl_loss = (self.q_posterior(x_t, x_0_true, t) * (log_q_posterior - log_p_theta)).sum(dim=-1)
-        
-        l_0_loss = -(x_0_true * torch.log(x_0_pred + 1e-10)).sum(dim=-1)
-
-        is_not_zero = (t != 0).float()
-        
-        final_loss = (is_not_zero * kl_loss) + ((1 - is_not_zero) * l_0_loss)
-        
-        return final_loss.mean()
+        loss = torch.nn.functional.mse_loss(predicted_noise, noise)
+        return loss
