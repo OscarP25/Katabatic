@@ -1,64 +1,48 @@
-# katabatic/models/qrf/generator.py
-
 from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 
 from quantile_forest import RandomForestQuantileRegressor
+from sklearn.preprocessing import OrdinalEncoder
 
 
 class QRFSequentialGenerator:
     """
-    Sequential conditional generator using Quantile Regression Forests.
-
-    Trains one QRF per column:
-    P(X_j | X_1, ..., X_{j-1})
+    Sequential feature generator using Quantile Regression Forests.
     """
 
-    def __init__(self):
-        self.columns: list[str] = []
-        self.models: dict[str, RandomForestQuantileRegressor] = {}
-
-    def fit(self, data: pd.DataFrame) -> None:
-        """
-        Fit one QRF model per column using previous columns as inputs.
-        """
-        self.columns = list(data.columns)
+    def __init__(self, qrf_params: dict):
+        self.qrf_params = qrf_params
+        self.columns = []
         self.models = {}
+        self.encoder = OrdinalEncoder(
+            handle_unknown="use_encoded_value",
+            unknown_value=-1
+        )
+
+    def fit(self, data: pd.DataFrame):
+        self.columns = list(data.columns)
+
+        X_encoded = self.encoder.fit_transform(data.astype(str))
+        X_encoded = pd.DataFrame(X_encoded, columns=self.columns)
 
         for i, col in enumerate(self.columns):
-            if i == 0:
-                # First column: fit unconditional model (dummy input)
-                X = np.zeros((len(data), 1))
-            else:
-                X = data[self.columns[:i]].values
+            X = X_encoded[self.columns[:i]].values if i > 0 else np.zeros((len(X_encoded), 1))
+            y = X_encoded[col].values.astype(float)
 
-            y = data[col].values
-
-            model = RandomForestQuantileRegressor()
+            model = RandomForestQuantileRegressor(**self.qrf_params)
             model.fit(X, y)
-
             self.models[col] = model
 
     def sample(self, n: int) -> pd.DataFrame:
-        """
-        Generate n synthetic rows sequentially.
-        """
         synthetic = pd.DataFrame(index=range(n))
 
         for i, col in enumerate(self.columns):
-            model = self.models[col]
+            X = synthetic[self.columns[:i]].values if i > 0 else np.zeros((n, 1))
+            q = float(np.random.uniform(0.1, 0.9))
+            synthetic[col] = self.models[col].predict(X, quantiles=q)
 
-            if i == 0:
-                X = np.zeros((n, 1))
-            else:
-                X = synthetic[self.columns[:i]].values
-
-            # Sample random quantiles (uniform) → stochastic generation
-            q = np.random.uniform(0.05, 0.95, size=n)
-
-            values = model.predict(X, quantiles=q)
-            synthetic[col] = values
+        # inverse encoding
+        synthetic[self.columns] = self.encoder.inverse_transform(synthetic[self.columns])
 
         return synthetic
