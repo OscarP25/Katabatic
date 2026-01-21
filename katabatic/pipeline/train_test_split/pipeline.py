@@ -1,6 +1,7 @@
-from katabatic.pipeline.base_pipeline import Pipeline
-from katabatic.models.base_model import Model
 from katabatic.evaluate.tstr.evaluation import TSTREvaluation
+from katabatic.evaluate.fairness_evaluation import FairnessEvaluation
+from katabatic.models.base_model import Model
+from katabatic.pipeline.base_pipeline import Pipeline
 from katabatic.utils.split_dataset import split_dataset
 
 
@@ -11,7 +12,11 @@ class TrainTestSplitPipeline(Pipeline):
     """
     _evaluations = [TSTREvaluation]
 
-    def __init__(self, model: Model, evaluations=None, override_evaluations=False):
+    def __init__(
+            self,
+            model: Model,
+            evaluations=None,
+            override_evaluations=False):
         super().__init__(model)
 
         if evaluations and override_evaluations:
@@ -22,11 +27,15 @@ class TrainTestSplitPipeline(Pipeline):
     def run(self, *args, **kwargs):
         """
         Run the train test split pipeline with the given arguments.
+        Kwargs:
+            fairness_eval (bool): If True, uses FairnessEvaluation.
         """
         current_model = self.model()
 
         input_csv = kwargs.pop('input_csv', None)
         output_dir = kwargs.pop('output_dir', None)
+
+        fairness_eval = kwargs.pop('fairness_eval', False)
 
         if not input_csv or not output_dir:
             raise ValueError(
@@ -37,11 +46,17 @@ class TrainTestSplitPipeline(Pipeline):
         # Train the model (may consume extra kwargs like 'config')
         current_model.train(output_dir, *args, **kwargs)
 
-        # Filter kwargs for evaluations to avoid unexpected params (e.g., 'config')
+        # Filter kwargs for evaluations to avoid unexpected params (e.g.,
+        # 'config')
         eval_kwargs = dict(kwargs)
         eval_kwargs.pop('config', None)
 
-        for evaluation in self._evaluations:
+        evaluators_to_run = self._evaluations
+
+        if fairness_eval:
+            evaluators_to_run = [FairnessEvaluation]
+
+        for evaluation in evaluators_to_run:
             eval_instance = evaluation(*args, **eval_kwargs)
             eval_instance.evaluate()
 
