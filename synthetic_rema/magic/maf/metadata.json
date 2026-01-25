@@ -1,0 +1,16 @@
+{
+  "model": "Class-Conditional MAF",
+  "label_probs": {
+    "0": 0.6483964248159831,
+    "1": 0.3516035751840168
+  },
+  "config": {
+    "epochs": 120,
+    "batch_size": 256,
+    "lr": 0.001,
+    "hidden_features": 256,
+    "num_transforms": 8,
+    "seed": 42,
+    "device": "cpu"
+  }
+}

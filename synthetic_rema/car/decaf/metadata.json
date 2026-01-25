@@ -1,0 +1,8 @@
+{
+  "model": "DECAF",
+  "paper": "NeurIPS 2021",
+  "dataset": "CAR",
+  "epochs": 300,
+  "dag": "chain",
+  "tuning": "none"
+}

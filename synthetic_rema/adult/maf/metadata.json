@@ -1,0 +1,31 @@
+{
+  "model": "Class-Conditional MAF",
+  "label_col": "class",
+  "feature_columns": [
+    "age",
+    "workclass",
+    "fnlwgt",
+    "education",
+    "education-num",
+    "marital-status",
+    "occupation",
+    "relationship",
+    "race",
+    "sex",
+    "capital-gain",
+    "capital-loss",
+    "hours-per-week",
+    "native-country"
+  ],
+  "label_probs_encoded_space": {
+    "0": 0.7591753685503686,
+    "1": 0.24082463144963145
+  },
+  "epochs": 50,
+  "batch_size": 1024,
+  "lr": 0.0008,
+  "hidden_features": 128,
+  "num_transforms": 8,
+  "device": "cuda",
+  "seed": 42
+}
