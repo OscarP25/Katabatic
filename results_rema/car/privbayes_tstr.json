@@ -1,0 +1,18 @@
+{
+  "LR": {
+    "Accuracy": 0.0,
+    "F1 Score": 0.0
+  },
+  "MLP": {
+    "Accuracy": 0.0,
+    "F1 Score": 0.0
+  },
+  "RF": {
+    "Accuracy": 0.0,
+    "F1 Score": 0.0
+  },
+  "XGBoost": {
+    "Accuracy": 0.0,
+    "F1 Score": 0.0
+  }
+}

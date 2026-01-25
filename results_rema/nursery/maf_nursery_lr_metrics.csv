@@ -1,0 +1,3 @@
+Model,Metric,Value
+LR,Accuracy,0.3121141975308642
+LR,F1_Macro,0.11893560717436048
