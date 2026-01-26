@@ -1,0 +1,53 @@
+Preprocessing: raw_data/shuttle.csv
+Saved preprocessed discrete dataset to: discretized_data/shuttle.csv
+Starting pipeline for forestdiffusion on shuttle
+Loaded data with shape: (58000, 10)
+Saved train/test full data
+Train size: (46400, 10), Test size: (11600, 10)
+Train label distribution:
+ class
+0    0.785970
+3    0.153491
+4    0.056336
+2    0.002953
+1    0.000862
+6    0.000216
+5    0.000172
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.785948
+3    0.153534
+4    0.056293
+2    0.002931
+1    0.000862
+6    0.000259
+5    0.000172
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (46400, 9) (46400,)
+Test shape: (11600, 9) (11600,)
+Loading ForestDiffusion data from: sample_data/shuttle
+Training ForestDiffusion on 46400 rows (n_t=50)...
+Generating synthetic data to: synthetic/shuttle/forestdiffusion
+Saved artifacts.
+
+Results saved to: Results/shuttle/forestdiffusion_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.9616
+F1 Score: 0.9602
+
+MLP:
+Accuracy: 0.9968
+F1 Score: 0.9966
+
+RF:
+Accuracy: 0.9953
+F1 Score: 0.9954
+
+XGBoost:
+Accuracy: 0.9971
+F1 Score: 0.9968

@@ -1,0 +1,48 @@
+Preprocessing: raw_data/nursery.csv
+Saved preprocessed discrete dataset to: discretized_data/nursery.csv
+Starting pipeline for forestdiffusion on nursery
+Loaded data with shape: (12960, 9)
+Saved train/test full data
+Train size: (10368, 9), Test size: (2592, 9)
+Train label distribution:
+ 8
+0    0.333333
+1    0.329186
+3    0.312018
+4    0.025270
+2    0.000193
+Name: proportion, dtype: float64
+Test label distribution:
+ 8
+0    0.333333
+1    0.329090
+3    0.312114
+4    0.025463
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (10368, 8) (10368,)
+Test shape: (2592, 8) (2592,)
+Loading ForestDiffusion data from: sample_data/nursery
+Training ForestDiffusion on 10368 rows (n_t=50)...
+Generating synthetic data to: synthetic/nursery/forestdiffusion
+Saved artifacts.
+
+Results saved to: Results/nursery/forestdiffusion_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7658
+F1 Score: 0.7574
+
+MLP:
+Accuracy: 0.9371
+F1 Score: 0.9325
+
+RF:
+Accuracy: 0.9032
+F1 Score: 0.9023
+
+XGBoost:
+Accuracy: 0.9263
+F1 Score: 0.9264

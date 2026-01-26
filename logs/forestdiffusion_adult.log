@@ -1,0 +1,47 @@
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for forestdiffusion on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+Loading ForestDiffusion data from: sample_data/adult
+Training ForestDiffusion on 26048 rows (n_t=50)...
+Generating synthetic data to: synthetic/adult/forestdiffusion
+Saved artifacts.
+
+Results saved to: Results/adult/forestdiffusion_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.8135
+F1 Score: 0.7909
+AUC: 0.8397
+
+MLP:
+Accuracy: 0.8339
+F1 Score: 0.8282
+AUC: 0.8871
+
+RF:
+Accuracy: 0.8254
+F1 Score: 0.8212
+AUC: 0.8720
+
+XGBoost:
+Accuracy: 0.7944
+F1 Score: 0.8067
+AUC: 0.8971
