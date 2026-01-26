@@ -1,0 +1,13 @@
+Model,Metric,Value
+LR,Accuracy,0.2193
+LR,F1 Score,0.0917
+LR,AUC,0.4427
+MLP,Accuracy,0.2291
+MLP,F1 Score,0.0916
+MLP,AUC,0.4742
+RF,Accuracy,0.6622
+RF,F1 Score,0.6206
+RF,AUC,0.442
+XGBoost,Accuracy,0.7593
+XGBoost,F1 Score,0.6553
+XGBoost,AUC,0.4288
