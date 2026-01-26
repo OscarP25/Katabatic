@@ -1,0 +1,53 @@
+Preprocessing: raw_data/shuttle.csv
+Saved preprocessed discrete dataset to: discretized_data/shuttle.csv
+Starting pipeline for copulagan on shuttle
+Loaded data with shape: (58000, 10)
+Saved train/test full data
+Train size: (46400, 10), Test size: (11600, 10)
+Train label distribution:
+ class
+0    0.785970
+3    0.153491
+4    0.056336
+2    0.002953
+1    0.000862
+6    0.000216
+5    0.000172
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.785948
+3    0.153534
+4    0.056293
+2    0.002931
+1    0.000862
+6    0.000259
+5    0.000172
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (46400, 9) (46400,)
+Test shape: (11600, 9) (11600,)
+Loading CopulaGAN data from: sample_data/shuttle
+Training CopulaGAN on 46400 rows...
+Generating synthetic data to: synthetic/shuttle/copulagan
+Saved artifacts.
+
+Results saved to: Results/shuttle/copulagan_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.9386
+F1 Score: 0.9363
+
+MLP:
+Accuracy: 0.9883
+F1 Score: 0.9885
+
+RF:
+Accuracy: 0.9859
+F1 Score: 0.9861
+
+XGBoost:
+Accuracy: 0.9897
+F1 Score: 0.9898

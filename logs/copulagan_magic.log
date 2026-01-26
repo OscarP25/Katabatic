@@ -1,0 +1,47 @@
+Preprocessing: raw_data/magic.csv
+Saved preprocessed discrete dataset to: discretized_data/magic.csv
+Starting pipeline for copulagan on magic
+Loaded data with shape: (19020, 11)
+Saved train/test full data
+Train size: (15216, 11), Test size: (3804, 11)
+Train label distribution:
+ class
+0    0.648396
+1    0.351604
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.648265
+1    0.351735
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (15216, 10) (15216,)
+Test shape: (3804, 10) (3804,)
+Loading CopulaGAN data from: sample_data/magic
+Training CopulaGAN on 15216 rows...
+Generating synthetic data to: synthetic/magic/copulagan
+Saved artifacts.
+
+Results saved to: Results/magic/copulagan_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7815
+F1 Score: 0.7825
+AUC: 0.8429
+
+MLP:
+Accuracy: 0.8002
+F1 Score: 0.7921
+AUC: 0.8724
+
+RF:
+Accuracy: 0.7850
+F1 Score: 0.7803
+AUC: 0.8345
+
+XGBoost:
+Accuracy: 0.7992
+F1 Score: 0.7937
+AUC: 0.8634

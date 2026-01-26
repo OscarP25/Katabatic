@@ -1,0 +1,47 @@
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for copulagan on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+Loading CopulaGAN data from: sample_data/adult
+Training CopulaGAN on 26048 rows...
+Generating synthetic data to: synthetic/adult/copulagan
+Saved artifacts.
+
+Results saved to: Results/adult/copulagan_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.8035
+F1 Score: 0.7684
+AUC: 0.8256
+
+MLP:
+Accuracy: 0.8308
+F1 Score: 0.8246
+AUC: 0.8823
+
+RF:
+Accuracy: 0.8319
+F1 Score: 0.8238
+AUC: 0.8655
+
+XGBoost:
+Accuracy: 0.8110
+F1 Score: 0.8194
+AUC: 0.8820
