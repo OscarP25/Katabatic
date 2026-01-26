@@ -1,0 +1,48 @@
+
+--- Configuration for TABFAIRGDT ---
+Please enter the Protected Attribute column name for 'adult': -> Using protected attribute: 'sex'
+
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for tabfairgdt on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+[TabFairGDT] Target: class | Protected: sex
+
+Results saved to: Results/adult/tabfairgdt_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7593
+F1 Score: 0.6553
+AUC: 0.4999
+
+MLP:
+Accuracy: 0.7562
+F1 Score: 0.6597
+AUC: 0.5719
+
+RF:
+Accuracy: 0.7203
+F1 Score: 0.6587
+AUC: 0.4905
+
+XGBoost:
+Accuracy: 0.5440
+F1 Score: 0.5742
+AUC: 0.4841

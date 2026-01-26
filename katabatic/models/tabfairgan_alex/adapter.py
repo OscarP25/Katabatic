@@ -4,7 +4,7 @@ import torch
 import os
 from typing import Optional, Dict, Union
 from katabatic.models.base_model import Model as BaseModel
-from katabatic.models.tabfairgan.models import TFG
+from katabatic.models.tabfairgan_alex.models import TFG
 
 class KatabaticTabFairGAN(BaseModel):
     def __init__(

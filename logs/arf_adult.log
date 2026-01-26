@@ -1,0 +1,49 @@
+
+--- Configuration for ARF ---
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for arf on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+Loading ARF data from: sample_data/adult
+Training ARF on 26048 rows...
+Generating synthetic data to: synthetic/adult/arf
+Saved artifacts.
+
+Results saved to: Results/adult/arf_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.8105
+F1 Score: 0.7946
+AUC: 0.8291
+
+MLP:
+Accuracy: 0.8170
+F1 Score: 0.8143
+AUC: 0.8614
+
+RF:
+Accuracy: 0.8144
+F1 Score: 0.8097
+AUC: 0.8603
+
+XGBoost:
+Accuracy: 0.8098
+F1 Score: 0.8110
+AUC: 0.8600

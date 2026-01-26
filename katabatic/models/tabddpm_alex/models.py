@@ -113,7 +113,7 @@ class Tabddpm(Model):
         ]
         # Only require external tabddpm if actually available/imported
         try:  # pragma: no cover
-            import tabddpm  # type: ignore  # noqa: F401
+            import tabddpm_alex  # type: ignore  # noqa: F401
             deps.append("tabddpm")
         except Exception:
             pass
