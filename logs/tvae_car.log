@@ -1,0 +1,47 @@
+Preprocessing: raw_data/car.csv
+Saved preprocessed discrete dataset to: discretized_data/car.csv
+Starting pipeline for tvae on car
+Loaded data with shape: (1728, 7)
+Saved train/test full data
+Train size: (1382, 7), Test size: (346, 7)
+Train label distribution:
+ 6
+2    0.700434
+0    0.222142
+1    0.039797
+3    0.037627
+Name: proportion, dtype: float64
+Test label distribution:
+ 6
+2    0.699422
+0    0.222543
+1    0.040462
+3    0.037572
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (1382, 6) (1382,)
+Test shape: (346, 6) (346,)
+Loading TVAE data from: sample_data/car
+Training TVAE on 1382 rows...
+Generating synthetic data to: synthetic/car/tvae
+Saved artifacts.
+
+Results saved to: Results/car/tvae_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7110
+F1 Score: 0.6308
+
+MLP:
+Accuracy: 0.7919
+F1 Score: 0.7501
+
+RF:
+Accuracy: 0.8179
+F1 Score: 0.7986
+
+XGBoost:
+Accuracy: 0.8064
+F1 Score: 0.7896

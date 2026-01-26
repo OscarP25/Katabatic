@@ -1,0 +1,47 @@
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for tvae on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+Loading TVAE data from: sample_data/adult
+Training TVAE on 26048 rows...
+Generating synthetic data to: synthetic/adult/tvae
+Saved artifacts.
+
+Results saved to: Results/adult/tvae_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7950
+F1 Score: 0.7819
+AUC: 0.8266
+
+MLP:
+Accuracy: 0.8108
+F1 Score: 0.8049
+AUC: 0.8458
+
+RF:
+Accuracy: 0.8056
+F1 Score: 0.8007
+AUC: 0.8460
+
+XGBoost:
+Accuracy: 0.7814
+F1 Score: 0.7933
+AUC: 0.8653

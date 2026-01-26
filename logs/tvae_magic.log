@@ -1,0 +1,47 @@
+Preprocessing: raw_data/magic.csv
+Saved preprocessed discrete dataset to: discretized_data/magic.csv
+Starting pipeline for tvae on magic
+Loaded data with shape: (19020, 11)
+Saved train/test full data
+Train size: (15216, 11), Test size: (3804, 11)
+Train label distribution:
+ class
+0    0.648396
+1    0.351604
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.648265
+1    0.351735
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (15216, 10) (15216,)
+Test shape: (3804, 10) (3804,)
+Loading TVAE data from: sample_data/magic
+Training TVAE on 15216 rows...
+Generating synthetic data to: synthetic/magic/tvae
+Saved artifacts.
+
+Results saved to: Results/magic/tvae_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7928
+F1 Score: 0.7901
+AUC: 0.8370
+
+MLP:
+Accuracy: 0.8183
+F1 Score: 0.8169
+AUC: 0.8725
+
+RF:
+Accuracy: 0.7973
+F1 Score: 0.7970
+AUC: 0.8499
+
+XGBoost:
+Accuracy: 0.8057
+F1 Score: 0.8059
+AUC: 0.8672
