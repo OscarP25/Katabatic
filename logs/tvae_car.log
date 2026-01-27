@@ -31,17 +31,17 @@ Results saved to: Results/car/tvae_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.7110
-F1 Score: 0.6308
+Accuracy: 0.6994
+F1 Score: 0.6163
 
 MLP:
-Accuracy: 0.7919
-F1 Score: 0.7501
+Accuracy: 0.8295
+F1 Score: 0.7963
 
 RF:
-Accuracy: 0.8179
-F1 Score: 0.7986
+Accuracy: 0.8208
+F1 Score: 0.7928
 
 XGBoost:
-Accuracy: 0.8064
-F1 Score: 0.7896
+Accuracy: 0.8266
+F1 Score: 0.8015

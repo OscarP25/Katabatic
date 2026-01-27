@@ -27,21 +27,21 @@ Results saved to: Results/adult/tvae_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.7950
-F1 Score: 0.7819
-AUC: 0.8266
+Accuracy: 0.8099
+F1 Score: 0.7965
+AUC: 0.8319
 
 MLP:
-Accuracy: 0.8108
-F1 Score: 0.8049
-AUC: 0.8458
+Accuracy: 0.8113
+F1 Score: 0.8143
+AUC: 0.8687
 
 RF:
-Accuracy: 0.8056
-F1 Score: 0.8007
-AUC: 0.8460
+Accuracy: 0.8197
+F1 Score: 0.8163
+AUC: 0.8542
 
 XGBoost:
-Accuracy: 0.7814
-F1 Score: 0.7933
-AUC: 0.8653
+Accuracy: 0.7768
+F1 Score: 0.7901
+AUC: 0.8711

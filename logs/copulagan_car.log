@@ -35,13 +35,13 @@ Accuracy: 0.6994
 F1 Score: 0.5757
 
 MLP:
-Accuracy: 0.7023
-F1 Score: 0.5824
+Accuracy: 0.6416
+F1 Score: 0.5598
 
 RF:
-Accuracy: 0.6705
-F1 Score: 0.6343
+Accuracy: 0.5665
+F1 Score: 0.5507
 
 XGBoost:
-Accuracy: 0.6301
-F1 Score: 0.6107
+Accuracy: 0.5318
+F1 Score: 0.5325

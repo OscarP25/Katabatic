@@ -27,21 +27,21 @@ Results saved to: Results/adult/copulagan_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.8035
-F1 Score: 0.7684
-AUC: 0.8256
+Accuracy: 0.8108
+F1 Score: 0.7863
+AUC: 0.8279
 
 MLP:
-Accuracy: 0.8308
-F1 Score: 0.8246
-AUC: 0.8823
+Accuracy: 0.8389
+F1 Score: 0.8252
+AUC: 0.8893
 
 RF:
-Accuracy: 0.8319
-F1 Score: 0.8238
-AUC: 0.8655
+Accuracy: 0.8302
+F1 Score: 0.8215
+AUC: 0.8682
 
 XGBoost:
-Accuracy: 0.8110
-F1 Score: 0.8194
-AUC: 0.8820
+Accuracy: 0.8196
+F1 Score: 0.8275
+AUC: 0.8894

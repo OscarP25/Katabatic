@@ -27,21 +27,21 @@ Results saved to: Results/magic/tvae_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.7928
-F1 Score: 0.7901
-AUC: 0.8370
+Accuracy: 0.7934
+F1 Score: 0.7912
+AUC: 0.8441
 
 MLP:
-Accuracy: 0.8183
-F1 Score: 0.8169
-AUC: 0.8725
+Accuracy: 0.8102
+F1 Score: 0.8112
+AUC: 0.8750
 
 RF:
-Accuracy: 0.7973
-F1 Score: 0.7970
-AUC: 0.8499
+Accuracy: 0.7960
+F1 Score: 0.7969
+AUC: 0.8632
 
 XGBoost:
-Accuracy: 0.8057
-F1 Score: 0.8059
-AUC: 0.8672
+Accuracy: 0.8021
+F1 Score: 0.8051
+AUC: 0.8786

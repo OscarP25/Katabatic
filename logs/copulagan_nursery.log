@@ -32,17 +32,17 @@ Results saved to: Results/nursery/copulagan_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.7377
-F1 Score: 0.7289
+Accuracy: 0.7311
+F1 Score: 0.6985
 
 MLP:
-Accuracy: 0.8646
-F1 Score: 0.8555
+Accuracy: 0.8492
+F1 Score: 0.8387
 
 RF:
-Accuracy: 0.7936
-F1 Score: 0.7898
+Accuracy: 0.7855
+F1 Score: 0.7827
 
 XGBoost:
-Accuracy: 0.8156
-F1 Score: 0.8121
+Accuracy: 0.8117
+F1 Score: 0.8065

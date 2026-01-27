@@ -25,7 +25,7 @@ Test shape: (2592, 8) (2592,)
 Loading TVAE data from: sample_data/nursery
 Training TVAE on 10368 rows...
 Generating synthetic data to: synthetic/nursery/tvae
-Warning: Mode collapse detected. Missing classes: {np.int64(2)}. Injecting recovery rows.
+Warning: Mode collapse detected. Missing classes: {np.int64(2), np.int64(3), np.int64(4)}. Injecting recovery rows.
 Saved artifacts.
 
 Results saved to: Results/nursery/tvae_tstr.csv
@@ -33,17 +33,17 @@ Results saved to: Results/nursery/tvae_tstr.csv
 TSTR Evaluation Results:
 
 LR:
-Accuracy: 0.6806
-F1 Score: 0.5866
+Accuracy: 0.6061
+F1 Score: 0.4826
 
 MLP:
-Accuracy: 0.6871
-F1 Score: 0.6034
+Accuracy: 0.6038
+F1 Score: 0.4851
 
 RF:
-Accuracy: 0.6867
-F1 Score: 0.6120
+Accuracy: 0.5995
+F1 Score: 0.4815
 
 XGBoost:
-Accuracy: 0.6987
-F1 Score: 0.6326
+Accuracy: 0.5509
+F1 Score: 0.4364
