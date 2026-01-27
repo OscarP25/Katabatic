@@ -17,7 +17,7 @@ class KatabaticVFAE(BaseModel):
         self.model = None
         self.fitted = False
         
-        # Internal storage for generation reconstruction
+        # Internal storage
         self.x_cols = []
         self.s_col = None
         self.y_col = None
@@ -36,11 +36,10 @@ class KatabaticVFAE(BaseModel):
         self.z_dim = kwargs.get('z_dim', self.z_dim)
         fairness_config = kwargs.get('fairness_config', {})
 
-        # 2. Robust Data Loading
+        # 2. Data Loading
         if isinstance(X, str):
             print(f"Loading VFAE training data from: {X}")
             try:
-                # skipinitialspace fixes " sex" -> "sex"
                 X_df = pd.read_csv(os.path.join(X, 'x_train.csv'), skipinitialspace=True)
                 y_df = pd.read_csv(os.path.join(X, 'y_train.csv'), skipinitialspace=True)
             except FileNotFoundError as e:
@@ -53,7 +52,7 @@ class KatabaticVFAE(BaseModel):
         else:
             self.fit(X, y, fairness_config=fairness_config)
 
-        # 3. Auto-Generate Split Artifacts for TSTR Evaluation
+        # 3. Auto-Generate Split for TSTR Evaluation
         synthetic_dir = kwargs.get('synthetic_dir')
         if synthetic_dir:
             print(f"Generating synthetic data to: {synthetic_dir}")
@@ -63,8 +62,7 @@ class KatabaticVFAE(BaseModel):
             n_samples = kwargs.get('n_samples', len(self.s_data_np))
             synth_df = self.sample(n_samples)
             
-            # --- CRITICAL FIX: Split X and Y for Evaluator ---
-            # self.y_col is guaranteed to be set by fit()
+            # Split X and Y for evaluator
             if self.y_col and self.y_col in synth_df.columns:
                 y_synth = synth_df[self.y_col]
                 x_synth = synth_df.drop(columns=[self.y_col])
@@ -74,7 +72,7 @@ class KatabaticVFAE(BaseModel):
                 y_synth.to_csv(os.path.join(synthetic_dir, 'y_synth.csv'), index=False)
                 print(f"Saved artifacts: x_synth.csv ({x_synth.shape}), y_synth.csv ({y_synth.shape})")
             else:
-                # Fallback (Should not happen if fit worked)
+                # Fallback
                 print("Warning: Target column not found in synthetic data. Saving single file.")
                 synth_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
 
@@ -89,10 +87,10 @@ class KatabaticVFAE(BaseModel):
         X = X.copy()
         X.columns = X.columns.str.strip()
         
-        # Capture exact column order (features only) for reconstruction alignment
+        # Capture exact column order for reconstruction
         self.original_feature_order = X.columns.tolist()
         
-        # 2. Config Extraction
+        # 2. Config extraction
         s_col = fairness_config.get('S')
         y_col = fairness_config.get('Y', 'target') 
 
@@ -117,8 +115,8 @@ class KatabaticVFAE(BaseModel):
         self.s_data_np = s_data
         self.y_data_np = y_data
 
-        # 5. Initialize & Train
-        print(f"Initializing VFAE (X:{x_data.shape[1]}, S:{s_data.shape[1]}, Y:{y_data.shape[1]})...")
+        # 5. Initialise & Train
+        print(f"Initialising VFAE (X:{x_data.shape[1]}, S:{s_data.shape[1]}, Y:{y_data.shape[1]})...")
         self.model = VFAE(
             x_dim=x_data.shape[1],
             s_dim=s_data.shape[1],
@@ -144,8 +142,7 @@ class KatabaticVFAE(BaseModel):
             self.y_data_np
         )
         
-        # --- FIX: Sanitize NaNs/Infs before casting ---
-        # Prevents "IntCastingNaNError" if model becomes unstable
+        # Sanitise NaNs/Infs before casting
         if np.isnan(x_gen).any() or np.isinf(x_gen).any():
             x_gen = np.nan_to_num(x_gen, nan=0.0, posinf=0.0, neginf=0.0)
         if np.isnan(s_gen).any() or np.isinf(s_gen).any():
@@ -160,8 +157,7 @@ class KatabaticVFAE(BaseModel):
         df_gen[self.s_col] = np.round(s_gen)
         df_gen[self.y_col] = np.round(y_gen)
         
-        # --- FIX: Restore Original Column Order ---
-        # Ensures x_synth matches x_test structure exactly (prevents "Feature names must match" error)
+        # Restore original column order
         if self.original_feature_order:
             ordered_cols = self.original_feature_order + [self.y_col]
             if all(c in df_gen.columns for c in ordered_cols):

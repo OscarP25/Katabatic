@@ -25,7 +25,6 @@ class VFAE:
             dropout_rate=0.1
         ).to(device)
         
-        # Reduced Learning Rate for stability (1e-3 -> 5e-4)
         self.optimizer = optim.Adam(self.model.parameters(), lr=5e-4)
 
     def train(self, x_data, s_data, y_data, epochs=100, batch_size=64):
@@ -55,12 +54,12 @@ class VFAE:
                     loss = loss_function_vfae(outputs, inputs)
                     
                     if torch.isnan(loss) or torch.isinf(loss):
-                        # Skip this batch but continue training
+                        # Skip batch but continue training
                         continue
                         
                     loss.backward()
                     
-                    # --- STABILITY FIX: Gradient Clipping ---
+                    # Gradient clipping to avoid exploding gradient problem
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
                     
                     self.optimizer.step()
@@ -68,7 +67,7 @@ class VFAE:
                     epoch_loss += loss.item()
                     valid_batches += 1
                 
-                # Avoid division by zero in logging
+                # Avoid div by zero
                 avg_loss = epoch_loss / valid_batches if valid_batches > 0 else 0
                 pbar.set_postfix({'loss': f"{avg_loss:.4f}"})
 
@@ -84,8 +83,6 @@ class VFAE:
             
             # 3. Decode Z2 -> Z1
             z2_y = torch.cat([z2, y_sample], dim=1)
-            # The decoder returns (z, sigma, mu), we usually take the mean (mu) for clean generation
-            # or sample again. Taking 'z' (sampled) is fine too.
             z1_gen, _, _ = self.model.decoder_z1(z2_y)
             
             # 4. Sample S

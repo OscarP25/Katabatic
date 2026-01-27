@@ -66,8 +66,7 @@ class VariationalFairAutoEncoder(Module):
             'x_decoded': x_decoded,
             'y_decoded': y_decoded,
             'z1_encoded': z1_encoded,
-            # Latent distributions
-            'z1_enc_logvar': z1_enc_logvar, # This is actually sigma (std dev)
+            'z1_enc_logvar': z1_enc_logvar,
             'z1_enc_mu': z1_enc_mu,
             'z2_enc_logvar': z2_enc_logvar,
             'z2_enc_mu': z2_enc_mu,
@@ -88,23 +87,18 @@ class VariationalMLP(Module):
 
     def forward(self, inputs):
         x = self.encoder(inputs)
-        x = self.activation(x)  # Ensure activation is applied
+        x = self.activation(x)
         
         mu = self.mu_encoder(x)
         log_var_raw = self.logvar_encoder(x)
         
-        # --- STABILITY FIX 1: CLAMPING ---
-        # Clamp log_variance to prevent exp() from producing Inf or 0
-        # Range [-10, 10] corresponds to std_dev approx [0.006, 148]
+        # Implement clamping to avoid exploding/vanishing gradients
         log_var_clamped = torch.clamp(log_var_raw, min=-10, max=10)
         
-        # Calculate sigma (standard deviation)
-        # Note: Original code used (0.5 * ...).exp() which is sigma
+        # Calculate std.dev
         sigma = (0.5 * log_var_clamped).exp()
 
-        # --- STABILITY FIX 2: STANDARD REPARAMETERIZATION ---
-        # Original code was: z = epsilon * mu + sigma (Non-standard)
-        # Standard VAE:      z = mu + epsilon * sigma
+        # compute reparameterisation
         epsilon = torch.randn_like(mu)
         z = mu + epsilon * sigma
         
