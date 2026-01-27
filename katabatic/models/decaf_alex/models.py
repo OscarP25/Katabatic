@@ -23,11 +23,10 @@ class DECAF:
         device: str = 'cpu'
     ):
         self.x_dim = input_dim
-        self.z_dim = input_dim # In DECAF z_dim = x_dim
+        self.z_dim = input_dim
         self.device = device
         self.dag_seed = dag_seed
         
-        # Hyperparams
         self.lr = lr
         self.batch_size = batch_size
         self.lambda_gp = lambda_gp
@@ -48,7 +47,7 @@ class DECAF:
             x_dim=self.x_dim, h_dim=h_dim, device=device
         ).to(device)
 
-        # Optimizers
+        # Optimisers
         self.opt_g = optim.AdamW(self.generator.parameters(), lr=lr, betas=(0.5, 0.999))
         self.opt_d = optim.AdamW(self.discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
@@ -86,7 +85,6 @@ class DECAF:
         return l1
 
     def gradient_dag_loss(self, x, z):
-        # Note: Expensive operation, usually omitted if DAG is provided
         x.requires_grad = True
         z.requires_grad = True
         gen_x = self.generator(x, z)
@@ -114,12 +112,10 @@ class DECAF:
         try:
             gen_order = list(nx.algorithms.dag.topological_sort(G))
         except nx.NetworkXUnfeasible:
-            # Fallback if graph is not DAG (during training early stages)
             gen_order = list(range(self.x_dim))
         return gen_order
 
     def train(self, data, epochs=100):
-        # Create DataLoader
         dataset = torch.utils.data.TensorDataset(torch.FloatTensor(data))
         loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
         
@@ -134,7 +130,7 @@ class DECAF:
                 for batch in loader:
                     batch = batch[0].to(self.device)
                     
-                    # --- 1. Train Discriminator ---
+                    # 1. Train discriminator
                     self.opt_d.zero_grad()
                     
                     z = torch.randn(batch.shape[0], self.z_dim, device=self.device)
@@ -149,7 +145,7 @@ class DECAF:
                     self.opt_d.step()
                     d_losses.append(d_loss.item())
                     
-                    # --- 2. Train Generator ---
+                    # 2. Train generator
                     self.opt_g.zero_grad()
                     
                     # Re-sample for generator update
@@ -160,9 +156,6 @@ class DECAF:
                     g_loss += self.lambda_privacy * self.privacy_loss(batch, fake)
                     g_loss += self.l1_g * self.l1_reg(self.generator)
                     
-                    # If DAG is being learned (empty seed), add DAG loss
-                    # Note: We skip complex gradient_dag_loss for speed unless requested
-                    
                     g_loss.backward()
                     self.opt_g.step()
                     g_losses.append(g_loss.item())
@@ -171,25 +164,9 @@ class DECAF:
 
     def generate(self, data, n_samples):
         self.generator.eval()
+        
         with torch.no_grad():
-            # DECAF generates by transforming input noise/data
-            # Standard generation: Use random noise + sequential pass
-            # We need a base 'x' to start masking from. 
-            # In DECAF paper, 'x' input to sequential is dummy if full generation?
-            # Actually, generator.sequential takes 'x'. 
-            # If we want pure synthetic, we can pass zeros or sampled data?
-            # DECAF usually works by imputation or transforming noise Z.
-            
-            # For sampling n new rows:
             z = torch.randn(n_samples, self.z_dim, device=self.device)
-            
-            # For the base 'x', we can sample from the real distribution (if performing counterfactuals)
-            # OR initialize with zeros if the DAG handles full generation from Z.
-            # Based on code: "out = x.clone().detach()" then "x_masked[:, i] = 0.0"
-            # So the initial values of x don't matter for root nodes (parents), 
-            # and child nodes get overwritten by parents. 
-            # So passing zeros is safe.
-            dummy_x = torch.zeros(n_samples, self.x_dim, device=self.device)
-            
+            dummy_x = torch.zeros(n_samples, self.x_dim, device=self.device)    
             generated = self.generator.sequential(dummy_x, z, self.get_gen_order())
             return generated.cpu().numpy()

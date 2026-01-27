@@ -3,15 +3,25 @@ import torch.nn as nn
 from typing import Any, List, Optional, Union
 
 def get_nonlin(name: str) -> nn.Module:
-    if name == "none": return nn.Identity()
-    elif name == "elu": return nn.ELU()
-    elif name == "relu": return nn.ReLU()
-    elif name == "leaky_relu": return nn.LeakyReLU()
-    elif name == "selu": return nn.SELU()
-    elif name == "tanh": return nn.Tanh()
-    elif name == "sigmoid": return nn.Sigmoid()
-    elif name == "softmax": return nn.Softmax(dim=-1)
-    else: raise ValueError(f"Unknown nonlinearity {name}")
+    match name:
+        case "none":
+            return nn.Identity()
+        case "elu":
+            return nn.ELU()
+        case "relu":
+            return nn.ReLU()
+        case "leaky_relu":
+            return nn.LeakyReLU()
+        case "selu":
+            return nn.SELU()
+        case "tanh":
+            return nn.Tanh()
+        case "sigmoid":
+            return nn.Sigmoid()
+        case "softmax":
+            return nn.Softmax(dim=-1)
+        case _:
+            raise ValueError(f"Unknown nonlinearity {name}")
 
 class TraceExpm(torch.autograd.Function):
     @staticmethod
@@ -46,7 +56,7 @@ class Generator_causal(nn.Module):
 
         self.shared = nn.Sequential(*block(h_dim, h_dim), *block(h_dim, h_dim)).to(device)
 
-        # Initialize Adjacency Matrix (M)
+        # Initialise adjacency matrix
         if len(dag_seed) > 0:
             M_init = torch.zeros(x_dim, x_dim)
             for pair in dag_seed:
@@ -64,7 +74,7 @@ class Generator_causal(nn.Module):
         self.fc_i = nn.ModuleList([nn.Linear(x_dim + 1, h_dim) for i in range(self.x_dim)]).to(device)
         self.fc_f = nn.ModuleList([nn.Linear(h_dim, 1) for i in range(self.x_dim)]).to(device)
 
-        # Weight Initialization
+        # Weight initialisation
         for layer in self.shared.parameters():
             if type(layer) == nn.Linear:
                 torch.nn.init.xavier_normal_(layer.weight)

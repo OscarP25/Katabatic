@@ -1,151 +1,160 @@
 import pandas as pd
-import numpy as np
 import torch
 import os
-from typing import Union, Optional, Dict, List
+from typing import Union, Optional
+from .models import DECAF 
 from katabatic.models.base_model import Model as BaseModel
-from .models import DECAF
 
 class KatabaticDECAF(BaseModel):
-    def __init__(self, epochs=50, batch_size=64, dag: Optional[List[List[str]]] = None, **kwargs):
+    def __init__(self, epochs=50, batch_size=64, dag=None, **kwargs):
         super().__init__()
         self.epochs = epochs
         self.batch_size = batch_size
-        self.dag_config = dag or []
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.dag = dag
         self.model = None
-        
-        # Internal storage
-        self.columns = []     
-        self.target_col = None 
-        # FIX: Store constraints to prevent generation of invalid values (e.g. -1)
-        self.col_constraints = {} 
+        self.train_data = None
+        self.target_col = None
+        self.columns = None
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def train(self, X: Union[pd.DataFrame, str], y: Optional[Union[pd.Series, pd.DataFrame]] = None, **kwargs):
-        """
-        Loads data, trains DECAF, and generates valid split artifacts.
-        """
         # 1. Load Data
         if isinstance(X, str):
             print(f"Loading DECAF training data from: {X}")
             try:
                 X_df = pd.read_csv(os.path.join(X, 'x_train.csv'), skipinitialspace=True)
                 y_df = pd.read_csv(os.path.join(X, 'y_train.csv'), skipinitialspace=True)
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f"Pipeline artifacts missing in {X}. {e}")
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Pipeline artifacts missing in {X}")
             
-            if y_df.shape[1] == 1:
-                y_df = y_df.iloc[:, 0]
-            
-            self.fit(X_df, y_df, **kwargs)
-        else:
-            self.fit(X, y, **kwargs)
-
-        # 2. Generate Artifacts
-        synthetic_dir = kwargs.get('synthetic_dir')
-        if synthetic_dir:
-            print(f"Generating DECAF synthetic data to: {synthetic_dir}")
-            os.makedirs(synthetic_dir, exist_ok=True)
-            
-            n_samples = kwargs.get('n_samples', 1000) 
-            synth_df = self.sample(n_samples)
-            
-            # Split X and Y using the detected target column
-            target_name = self.target_col
-            
-            if not target_name:
-                fairness_cfg = kwargs.get('fairness_config', {})
-                target_name = fairness_cfg.get('Y') or kwargs.get('target_col', 'target')
-
-            if target_name and target_name in synth_df.columns:
-                y_synth = synth_df[target_name]
-                x_synth = synth_df.drop(columns=[target_name])
-                
-                x_synth.to_csv(os.path.join(synthetic_dir, 'x_synth.csv'), index=False)
-                y_synth.to_csv(os.path.join(synthetic_dir, 'y_synth.csv'), index=False)
-                print(f"Saved split artifacts: x_synth ({x_synth.shape}), y_synth ({y_synth.shape})")
+            if isinstance(y_df, pd.DataFrame) and y_df.shape[1] == 1:
+                self.target_col = y_df.columns[0]
+                data = pd.concat([X_df, y_df], axis=1)
             else:
-                print(f"Warning: Target '{target_name}' not found. Saving single file.")
-                synth_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
-
-    def evaluate(self, X, y=None, **kwargs):
-        return {}
-
-    def fit(self, X: pd.DataFrame, y: Union[pd.Series, pd.DataFrame], **kwargs):
-        # 1. Clean Headers
-        X = X.copy()
-        X.columns = X.columns.str.strip()
-        
-        # 2. Prepare Joint Data
-        data = X.copy()
-        
-        y_name = 'target'
-        if isinstance(y, pd.Series):
-            y_name = y.name or 'target'
-            data[y_name] = y.values
-        elif isinstance(y, pd.DataFrame):
-            y_name = y.columns[0]
-            data[y_name] = y.iloc[:, 0].values
+                data = X_df.copy()
+                self.target_col = 'target'
+                data[self.target_col] = y_df.values
         else:
-            data[y_name] = y
-            
-        self.target_col = y_name.strip()
+            data = X.copy()
+            if y is not None:
+                if isinstance(y, pd.Series):
+                    self.target_col = y.name or 'target'
+                    data[self.target_col] = y
+                else:
+                    self.target_col = y.columns[0]
+                    data[self.target_col] = y.iloc[:,0]
+
+        # Store for recovery
+        self.train_data = data
         self.columns = data.columns.tolist()
+
+        # 2. Configure DAG
+        dag_input = kwargs.get('dag', self.dag)
+        if dag_input is None:
+            raise ValueError("DECAF requires a DAG structure (list of edges).")
+
+        # Map string column names to integer indices
+        col_to_idx = {name: i for i, name in enumerate(self.columns)}
         
-        # FIX: Capture Min/Max constraints from Training Data
-        # This allows us to clip generated values like -0.5 to 0.0
-        for col in self.columns:
-            self.col_constraints[col] = {
-                'min': data[col].min(),
-                'max': data[col].max()
-            }
-        
-        data_np = data.values.astype(np.float32)
-        
-        # 3. Parse DAG
-        dag_config = kwargs.get('dag', self.dag_config)
-        dag_indices = []
-        
-        if dag_config:
-            col_map = {name: i for i, name in enumerate(self.columns)}
-            for parent, child in dag_config:
-                p_clean = parent.strip()
-                c_clean = child.strip()
-                if p_clean in col_map and c_clean in col_map:
-                    dag_indices.append([col_map[p_clean], col_map[c_clean]])
-        
-        # 4. Init & Train
-        epochs = kwargs.get('epochs', self.epochs)
-        print(f"Initializing DECAF (Dims:{data_np.shape[1]}, DAG Edges:{len(dag_indices)})...")
+        dag_idxs = []
+        for edge in dag_input:
+            src, dst = edge[0], edge[1]
+            src_idx = col_to_idx[src] if isinstance(src, str) else src
+            dst_idx = col_to_idx[dst] if isinstance(dst, str) else dst
+            dag_idxs.append([src_idx, dst_idx])
+
+        # 3. Initialise model 
+        print(f"Initializing DECAF (Dims:{data.shape[1]}, DAG Edges:{len(dag_idxs)}) on {self.device}...")
         
         self.model = DECAF(
-            input_dim=data_np.shape[1],
-            dag_seed=dag_indices,
-            h_dim=200,
-            batch_size=self.batch_size,
-            lr=1e-3,
+            input_dim=data.shape[1], 
+            dag_seed=dag_idxs,
+            batch_size=kwargs.get('batch_size', self.batch_size),
+            lr=kwargs.get('lr', 1e-3),
             device=self.device
         )
         
+        # 4. Train model
+        epochs = kwargs.get('epochs', self.epochs)
         print(f"Training DECAF on {len(data)} rows for {epochs} epochs...")
-        self.model.train(data_np, epochs=epochs)
+        
+        self.model.train(
+            data.values, 
+            epochs=epochs
+        )
+
+        # 5. Generate & save artifacts
+        synthetic_dir = kwargs.get('synthetic_dir')
+        if synthetic_dir:
+            n_samples = kwargs.get('n_samples', 1000)
+            print(f"Generating DECAF synthetic data to: {synthetic_dir}")
+            os.makedirs(synthetic_dir, exist_ok=True)
+            
+            synth_df = self.sample(n_samples)
+
+            if not self.target_col:
+                fairness_cfg = kwargs.get('fairness_config', {})
+                self.target_col = fairness_cfg.get('Y')
+
+            if self.target_col and self.target_col in synth_df.columns:
+                y_synth = synth_df[self.target_col]
+                x_synth = synth_df.drop(columns=[self.target_col])
+                
+                print(f"Saved split artifacts: x_synth ({x_synth.shape}), y_synth ({y_synth.shape})")
+                
+                x_synth.to_csv(os.path.join(synthetic_dir, 'x_synth.csv'), index=False)
+                y_synth.to_csv(os.path.join(synthetic_dir, 'y_synth.csv'), index=False)
+            else:
+                synth_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
 
     def sample(self, n_samples: int, **kwargs) -> pd.DataFrame:
-        if not self.model:
+        if self.model is None:
             raise RuntimeError("Model not fitted")
-            
-        gen_np = self.model.generate(None, n_samples)
         
-        # Create DataFrame to handle columns safely
-        df_gen = pd.DataFrame(gen_np, columns=self.columns)
+        # Generate raw numpy array
+        synth_np = self.model.generate(self.train_data.values, n_samples)
         
-        # FIX: Clip values to valid range [min, max] BEFORE rounding
-        # This prevents -0.1 becoming -1, ensuring strict [0, 1] for binary targets.
-        for col in self.columns:
-            if col in self.col_constraints:
-                c_min = self.col_constraints[col]['min']
-                c_max = self.col_constraints[col]['max']
-                df_gen[col] = df_gen[col].clip(lower=c_min, upper=c_max)
+        # Convert back to DataFrame
+        synth_df = pd.DataFrame(synth_np, columns=self.columns)
 
-        # Now safe to round and cast
-        return df_gen.round().astype(int)
+        # Enforce int for discrete columns
+        if self.train_data is not None:
+            for col in self.columns:
+                # Get the original dtype
+                orig_dtype = self.train_data[col].dtype
+                
+                # If originally int
+                if pd.api.types.is_integer_dtype(orig_dtype):
+                    synth_df[col] = synth_df[col].round().astype(int)
+                    # Clip [0, 1]
+                    synth_df[col] = synth_df[col].clip(self.train_data[col].min(), self.train_data[col].max())
+                
+                # Target column
+                elif col == self.target_col:
+                    synth_df[col] = synth_df[col].round().astype(int)
+                    synth_df[col] = synth_df[col].clip(self.train_data[col].min(), self.train_data[col].max())
+
+        # Class recovery for mode collapse
+        if self.train_data is not None and self.target_col is not None:
+            real_classes = self.train_data[self.target_col].unique()
+            synth_classes = synth_df[self.target_col].unique()
+            
+            missing_classes = set(map(str, real_classes)) - set(map(str, synth_classes))
+            
+            if missing_classes:
+                print(f"Warning: Mode collapse detected in DECAF. Missing classes: {missing_classes}. Injecting recovery rows.")
+                recovery_rows = []
+                for cls_str in missing_classes:
+                    mask = self.train_data[self.target_col].astype(str) == cls_str
+                    if mask.any():
+                        row = self.train_data[mask].iloc[[0]]
+                        recovery_rows.append(row)
+                
+                if recovery_rows:
+                    synth_df = pd.concat([synth_df] + recovery_rows, ignore_index=True)
+                    synth_df = synth_df.sample(frac=1).reset_index(drop=True)
+
+        return synth_df
+
+    def evaluate(self, X, y=None, **kwargs):
+        return {}
