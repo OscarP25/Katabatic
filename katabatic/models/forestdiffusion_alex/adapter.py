@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import os
 import pickle
 from typing import Union, Optional
@@ -19,7 +18,7 @@ class ForestDiffusion(BaseModel):
         self.target_col = None
         self.train_data = None
         self.columns = None
-        # ForestDiffusion specific metadata
+
         self.cat_indexes = []
         self.int_indexes = []
 
@@ -55,25 +54,19 @@ class ForestDiffusion(BaseModel):
         self.columns = data.columns
         
         # 2. Pre-process for ForestDiffusion
-        # It requires numpy input and indices for categorical/integer columns
         data_np = data.to_numpy()
-        
-        # Identify column types automatically
         self.cat_indexes = []
         self.int_indexes = []
         
         for idx, col in enumerate(data.columns):
-            # If object or category, treat as categorical
             if pd.api.types.is_object_dtype(data[col]) or pd.api.types.is_categorical_dtype(data[col]):
                 self.cat_indexes.append(idx)
-            # If integer, track it (ForestDiffusion handles rounding)
             elif pd.api.types.is_integer_dtype(data[col]):
                 self.int_indexes.append(idx)
 
-        # 3. Initialize & Train
+        # 3. Initialise & train
         print(f"Training ForestDiffusion on {len(data)} rows (n_t={self.n_t})...")
         
-        # FIX: Pass the lists directly. Do NOT convert to None if empty.
         self.model = ForestDiffusionModel(
             data_np, 
             label_y=None, 
@@ -85,7 +78,7 @@ class ForestDiffusion(BaseModel):
             n_jobs=-1
         )
         
-        # 4. Generate & Save Artifacts
+        # 4. Generate & save artifacts
         synthetic_dir = kwargs.get('synthetic_dir')
         if synthetic_dir:
             n_samples = kwargs.get('n_samples', len(data))
@@ -108,7 +101,7 @@ class ForestDiffusion(BaseModel):
             else:
                 synth_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
             
-            # Save Model Pickle
+            # Save model
             with open(os.path.join(synthetic_dir, 'forestdiffusion_model.pkl'), 'wb') as f:
                 pickle.dump(self.model, f)
             print("Saved artifacts.")
@@ -117,7 +110,7 @@ class ForestDiffusion(BaseModel):
         if self.model is None:
             raise RuntimeError("Model not initialized")
         
-        # Generate raw numpy array
+        # Generate numpy array
         synth_np = self.model.generate(batch_size=n_samples)
         
         # Convert back to DataFrame
@@ -128,9 +121,8 @@ class ForestDiffusion(BaseModel):
             col_name = self.columns[idx]
             synth_df[col_name] = synth_df[col_name].round().astype(int)
 
-        # --- Class Recovery ---
+        # Class recovery
         if self.train_data is not None and self.target_col is not None:
-            # Safely handle mixed types by converting to string for comparison
             real_classes = self.train_data[self.target_col].unique()
             synth_classes = synth_df[self.target_col].unique()
             
