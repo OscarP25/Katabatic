@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import pickle
 from typing import Union, Optional
 from sdv.single_table import CopulaGANSynthesizer
 from sdv.metadata import SingleTableMetadata
@@ -34,7 +33,6 @@ class CopulaGAN(BaseModel):
                 self.target_col = 'target'
                 data[self.target_col] = y_df.values
         else:
-            # InMemory DataFrame
             data = X.copy()
             if y is not None:
                 if isinstance(y, pd.Series):
@@ -44,11 +42,11 @@ class CopulaGAN(BaseModel):
                     self.target_col = y.columns[0]
                     data[self.target_col] = y.iloc[:,0]
 
-        # 2. Detect Metadata
+        # 2. Detect metadata
         self.metadata = SingleTableMetadata()
         self.metadata.detect_from_dataframe(data)
 
-        # 3. Initialize & Train
+        # 3. Initialise & train
         self.model = CopulaGANSynthesizer(
             metadata=self.metadata,
             epochs=kwargs.get('epochs', self.epochs),
@@ -59,7 +57,7 @@ class CopulaGAN(BaseModel):
         print(f"Training CopulaGAN on {len(data)} rows...")
         self.model.fit(data)
 
-        # 4. Generate & Save Artifacts
+        # 4. Generate & save artifacts
         synthetic_dir = kwargs.get('synthetic_dir')
         if synthetic_dir:
             n_samples = kwargs.get('n_samples', len(data))
