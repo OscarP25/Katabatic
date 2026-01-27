@@ -1,10 +1,10 @@
-# katabatic/__init__.py
 """
-Katabatic package initializer.
-This makes the repo importable as 'katabatic'.
+Katabatic package __init__
+
+We do NOT import PATEGAN from here anymore.
+PATEGAN lives in katabatic.models.pategan.
 """
 
-# Expose submodules
-from . import models
-from . import pipeline
-from . import utils
+# If you want to expose high-level things, you can add them to __all__.
+# For now we keep it simple.
+__all__ = []

@@ -1,333 +1,489 @@
-from katabatic.models.base_model import Model
-from sklearn.model_selection import StratifiedKFold
+# katabatic/models/ganblr/models.py
+# COMPLETE FILE (drop-in replacement)
+#
+# Fixes:
+# - Implements GANBLR.train() so GANBLR is NOT abstract
+# - Pipeline wrapper GANBLRModel calls GANBLR.train()
+# - Adds stability caps (max_synth) to avoid crashes
+# - Self-contained: includes KdbHighOrderFeatureEncoder + DataUtils
+
+from __future__ import annotations
+
+import os
 import random
+from dataclasses import dataclass
+from typing import Optional, Dict, List, Tuple
+
+import numpy as np
 import pandas as pd
-import argparse
-from .kdb import *
-from .kdb import _add_uniform
-from .utils import *
+import tensorflow as tf
+
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder, OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
 from pgmpy.models import DiscreteBayesianNetwork
 from pgmpy.sampling import BayesianModelSampling
 from pgmpy.factors.discrete import TabularCPD
-from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
-import numpy as np
-import tensorflow as tf
 
-import os
-import sys
-sys.path.append(os.path.abspath("."))
+from katabatic.models.base_model import Model
+from .kdb import build_graph, _add_uniform
+from .utils import softmax_weight, get_lr, elr_loss, sample
 
+
+# ============================================================
+# kDB High-Order Feature Encoder (self-contained)
+# ============================================================
+
+def _get_dependencies_without_y(variables, y_name, kdb_edges):
+    dependencies = {}
+    kdb_edges_without_y = [edge for edge in kdb_edges if edge[0] != y_name]
+    mi_desc_order = {t: i for i, (s, t) in enumerate(kdb_edges) if s == y_name}
+
+    for x in variables:
+        current_dependencies = [s for s, t in kdb_edges_without_y if t == x]
+        if len(current_dependencies) >= 2:
+            sort_dict = {t: mi_desc_order[t] for t in current_dependencies}
+            dependencies[x] = sorted(sort_dict)
+        else:
+            dependencies[x] = current_dependencies
+    return dependencies
+
+
+def get_cross_table(*cols):
+    if len(cols) == 0:
+        raise TypeError("get_cross_table() requires at least one argument")
+
+    cols = [np.asarray(c).reshape(-1) for c in cols]
+    if not all(len(col) == len(cols[0]) for col in cols[1:]):
+        raise ValueError("all arguments must be same size")
+
+    uniq_vals_all_cols, idx = zip(*(np.unique(col, return_inverse=True) for col in cols))
+    shape_xt = [uv.size for uv in uniq_vals_all_cols]
+    xt = np.zeros(shape_xt, dtype="uint64")
+    np.add.at(xt, idx, 1)
+    return uniq_vals_all_cols, xt
+
+
+def get_high_order_feature(X, col, evidence_cols, feature_uniques):
+    X = np.asarray(X)
+    if not evidence_cols:
+        return X[:, [col]]
+
+    base = [1, feature_uniques[col]] + [
+        feature_uniques[_col] for _col in evidence_cols[::-1][:-1]
+    ]
+    cum_base = np.cumprod(base)[::-1]
+    cols = evidence_cols + [col]
+    return np.sum(X[:, cols] * cum_base, axis=1).reshape(-1, 1)
+
+
+def get_high_order_constraints(X, col, evidence_cols, feature_uniques):
+    X = np.asarray(X)
+    if not evidence_cols:
+        unique = feature_uniques[col]
+        return np.ones(unique, dtype=bool), np.array([unique], dtype=int)
+
+    cols = evidence_cols + [col]
+    _, cross_table = get_cross_table(*[X[:, i] for i in cols])
+    have_value = cross_table != 0
+    have_value_reshape = have_value.reshape(-1, have_value.shape[-1])
+    high_order_constraints = np.sum(have_value_reshape, axis=-1).astype(int)
+    return have_value, high_order_constraints
+
+
+class KdbHighOrderFeatureEncoder:
+    """
+    High-order feature encoder using kDB dependencies.
+
+    Stability:
+    - fit OrdinalEncoder once, reuse in transform
+    - OneHotEncoder(handle_unknown="ignore")
+    """
+
+    def __init__(self):
+        self.dependencies_: Dict[int, List[int]] = {}
+        self.constraints_: np.ndarray = np.array([], dtype=int)
+        self.have_value_idxs_: List[np.ndarray] = []
+        self.feature_uniques_: List[int] = []
+        self.high_order_feature_uniques_: List[int] = []
+        self.edges_: List[Tuple[int, int]] = []
+        self.ohe_ = None
+        self._ord_ = None
+        self.k: Optional[int] = None
+
+    def fit(self, X, y, k=0):
+        from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder
+
+        X = np.asarray(X)
+        y = np.asarray(y).reshape(-1)
+        self.k = k
+
+        edges = build_graph(X, y, k)
+        num_features = X.shape[1]
+
+        if k > 0:
+            dependencies = _get_dependencies_without_y(list(range(num_features)), num_features, edges)
+        else:
+            dependencies = {x: [] for x in range(num_features)}
+
+        self.dependencies_ = dependencies
+        self.feature_uniques_ = [len(np.unique(X[:, i])) for i in range(num_features)]
+        self.edges_ = edges
+
+        Xk_raw, constraints, have_value_idxs = self.transform(
+            X, return_constraints=True, use_ohe=False
+        )
+
+        self._ord_ = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+        Xk_ord = self._ord_.fit_transform(Xk_raw)
+
+        self.ohe_ = OneHotEncoder(handle_unknown="ignore")
+        self.ohe_.fit(Xk_ord)
+
+        self.high_order_feature_uniques_ = [len(c) for c in self.ohe_.categories_]
+        self.constraints_ = constraints
+        self.have_value_idxs_ = have_value_idxs
+        return self
+
+    def transform(self, X, return_constraints=False, use_ohe=True):
+        X = np.asarray(X)
+
+        Xk = []
+        have_value_idxs = []
+        constraints = []
+
+        for col, parents in self.dependencies_.items():
+            Xk.append(get_high_order_feature(X, col, parents, self.feature_uniques_))
+            if return_constraints:
+                idx, constraint = get_high_order_constraints(X, col, parents, self.feature_uniques_)
+                have_value_idxs.append(idx)
+                constraints.append(constraint)
+
+        Xk_raw = np.hstack(Xk)
+
+        if self._ord_ is None:
+            if return_constraints:
+                conc = np.hstack(constraints) if constraints else np.array([], dtype=int)
+                return Xk_raw, conc, have_value_idxs
+            return Xk_raw
+
+        Xk_ord = self._ord_.transform(Xk_raw)
+        X_out = self.ohe_.transform(Xk_ord) if use_ohe else Xk_ord
+
+        if return_constraints:
+            conc = np.hstack(constraints) if constraints else np.array([], dtype=int)
+            return X_out, conc, have_value_idxs
+        return X_out
+
+
+# ============================================================
+# Data Utils
+# ============================================================
+
+class DataUtils:
+    def __init__(self, x: np.ndarray, y: np.ndarray):
+        self.x = np.asarray(x)
+        self.y = np.asarray(y).reshape(-1)
+
+        self.data_size = len(self.x)
+        self.num_features = self.x.shape[1]
+
+        yunique, ycounts = np.unique(self.y, return_counts=True)
+        self.num_classes = len(yunique)
+        self.class_counts = ycounts
+
+        self.feature_uniques = [len(np.unique(self.x[:, i])) for i in range(self.num_features)]
+
+        self.constraint_positions = None
+        self._kdbe: Optional[KdbHighOrderFeatureEncoder] = None
+        self.__kdbe_cache: Dict[Tuple[int, bool], np.ndarray] = {}
+
+    def get_categories(self):
+        if self._kdbe is None or self._kdbe.ohe_ is None:
+            raise RuntimeError("Kdb encoder not fit. Call get_kdbe_x() first.")
+        return self._kdbe.ohe_.categories_
+
+    def get_kdbe_x(self, k=0, dense_format=True):
+        key = (k, dense_format)
+        if key in self.__kdbe_cache:
+            return self.__kdbe_cache[key]
+
+        if self._kdbe is None or getattr(self._kdbe, "k", None) != k:
+            self._kdbe = KdbHighOrderFeatureEncoder()
+            self._kdbe.fit(self.x, self.y, k=k)
+
+        Xk = self._kdbe.transform(self.x)
+        if dense_format:
+            Xk = Xk.toarray()
+
+        self.constraint_positions = self._kdbe.constraints_
+        self.__kdbe_cache[key] = Xk
+        return Xk
+
+
+# ============================================================
+# GANBLR core model (NOW implements train())
+# ============================================================
 
 class GANBLR(Model):
-    """
-    The GANBLR Model.
-    """
-
     def __init__(self) -> None:
         super().__init__()
-        self.check_dependencies()  # Check dependencies on initialization
-        self._d = None
+        self.check_dependencies()
+
+        self._d: Optional[DataUtils] = None
         self.__gen_weights = None
-        self.batch_size = None
-        self.epochs = None
-        self.k = None
+        self.batch_size: Optional[int] = None
+        self.k: Optional[int] = None
         self.constraints = None
+
         self._ordinal_encoder = OrdinalEncoder(
-            dtype=int, handle_unknown='use_encoded_value', unknown_value=-1)
+            dtype=int, handle_unknown="use_encoded_value", unknown_value=-1
+        )
         self._label_encoder = LabelEncoder()
 
     @classmethod
     def get_required_dependencies(cls) -> list[str]:
-        """Return a list of required dependencies for this model."""
-        return ['tensorflow', 'pgmpy', 'sklearn', 'scipy']
+        return ["tensorflow", "pgmpy", "sklearn", "scipy", "pyitlib"]
 
-    def fit(self, x, y, k=0, batch_size=32, epochs=10, warmup_epochs=1, verbose=1):
-        '''
-        Fit the model to the given data.
-
-        Parameters
-        ----------
-        x : array_like of shape (n_samples, n_features)
-            Dataset to fit the model. The data should be discrete.
-
-        y : array_like of shape (n_samples,)
-            Label of the dataset.
-
-        k : int, default=0
-            Parameter k of ganblr model. Must be greater than 0. No more than 2 is Suggested.
-
-        batch_size : int, default=32
-            Size of the batch to feed the model at each step.
-
-        epochs : int, default=0
-            Number of epochs to use during training.
-
-        warmup_epochs : int, default=1
-            Number of epochs to use in warmup phase. Defaults to :attr:`1`.
-
-        verbose : int, default=1
-            Whether to output the log. Use 1 for log output and 0 for complete silence.
-
-        Returns
-        -------
-        self : object
-            Fitted model.
-        '''
+    def fit(self, x, y, k=1, batch_size=32, epochs=20, warmup_epochs=1, verbose=1):
         epsilon = 1e-10
 
-        if verbose is None or not isinstance(verbose, int):
-            verbose = 1
         x = self._ordinal_encoder.fit_transform(x)
         y = self._label_encoder.fit_transform(y).astype(int)
-        d = DataUtils(x, y)
-        self._d = d
-        self.k = k
-        self.batch_size = batch_size
+
+        self._d = DataUtils(x, y)
+        self.k = int(k)
+        self.batch_size = int(batch_size)
+
         if verbose:
-            print(f"warmup run:")
-        history = self._warmup_run(warmup_epochs, verbose=verbose)
+            print("warmup run:")
+        self._warmup_run(warmup_epochs, verbose=verbose)
+
         syn_data = self._sample(verbose=0)
-        discriminator_label = np.hstack(
-            [np.ones(d.data_size), np.zeros(d.data_size)])
-        for i in range(epochs):
+        discriminator_label = np.hstack([np.ones(self._d.data_size), np.zeros(self._d.data_size)])
+
+        for i in range(int(epochs)):
             discriminator_input = np.vstack([x, syn_data[:, :-1]])
             disc_input, disc_label = sample(
-                discriminator_input, discriminator_label, frac=0.8)
+                discriminator_input, discriminator_label, frac=0.8, random_state=42
+            )
+
             disc = self._discrim()
-            d_history = disc.fit(
-                disc_input, disc_label, batch_size=batch_size, epochs=1, verbose=0).history
+            disc.fit(disc_input, disc_label, batch_size=self.batch_size, epochs=1, verbose=0)
+
             prob_fake = disc.predict(x, verbose=0)
-            # ls = np.mean(-np.log(np.subtract(1, prob_fake)))
-            ls = np.mean(-np.log(np.clip(1 - prob_fake, epsilon, 1)))
-            g_history = self._run_generator(loss=ls).history
+            ls = float(np.mean(-np.log(np.clip(1 - prob_fake, epsilon, 1.0))))
+
+            self._run_generator(loss=ls)
             syn_data = self._sample(verbose=0)
 
             if verbose:
-                print(
-                    f"Epoch {i+1}/{epochs}: G_loss = {g_history['loss'][0]:.6f}, G_accuracy = {g_history['accuracy'][0]:.6f}, D_loss = {d_history['loss'][0]:.6f}, D_accuracy = {d_history['accuracy'][0]:.6f}")
+                print(f"Epoch {i+1}/{epochs} complete")
+
         return self
 
-    def evaluate(self, x, y, model='lr') -> float:
+    # ✅ REQUIRED by abstract base Model
+    def train(self, dataset, size_category="small", *args, **kwargs):
         """
-        Perform a TSTR(Training on Synthetic data, Testing on Real data) evaluation.
-
-        Parameters
-        ----------
-        x, y : array_like
-            Test dataset.
-
-        model : str or object
-            The model used for evaluate. Should be one of ['lr', 'mlp', 'rf'], or a model class that have sklearn-style `fit` and `predict` method.
-
-        Return:
-        --------
-        accuracy_score : float.
-
+        Pipeline passes:
+          dataset = folder with x_train.csv, y_train.csv
+          synthetic_dir = where to save x_synth.csv / y_synth.csv
         """
+
+        k = int(kwargs.get("k", 1))
+        epochs = int(kwargs.get("epochs", 20))
+        batch_size = int(kwargs.get("batch_size", 32))
+        warmup_epochs = int(kwargs.get("warmup_epochs", 1))
+        seed = int(kwargs.get("seed", 42))
+        max_synth = int(kwargs.get("max_synth", 5000))
+
+        # reproducibility
+        os.environ["PYTHONHASHSEED"] = str(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+
+        X = pd.read_csv(os.path.join(dataset, "x_train.csv"))
+        y = pd.read_csv(os.path.join(dataset, "y_train.csv")).values.ravel()
+
+        self.fit(
+            X, y,
+            k=k,
+            batch_size=batch_size,
+            epochs=epochs,
+            warmup_epochs=warmup_epochs,
+            verbose=1
+        )
+
+        syn_size = min(len(X), max_synth)
+        syn = self.sample(size=syn_size, verbose=0)
+
+        syn_df = pd.DataFrame(syn)
+        x_synth = syn_df.iloc[:, :-1]
+        y_synth = syn_df.iloc[:, -1]
+
+        x_synth.columns = list(X.columns)
+
+        save_dir = kwargs.get("synthetic_dir")
+        if not save_dir:
+            save_dir = os.path.join("synthetic", os.path.basename(str(dataset)), "ganblr")
+        os.makedirs(save_dir, exist_ok=True)
+
+        x_synth.to_csv(os.path.join(save_dir, "x_synth.csv"), index=False)
+        pd.Series(y_synth, name="target").to_csv(os.path.join(save_dir, "y_synth.csv"), index=False)
+
+        print(f"✅ GANBLR synthetic saved to: {save_dir} (rows={syn_size})")
+        return self
+
+    def evaluate(self, x, y, model="lr") -> float:
         from sklearn.linear_model import LogisticRegression
         from sklearn.neural_network import MLPClassifier
         from sklearn.ensemble import RandomForestClassifier
-        from sklearn.preprocessing import OneHotEncoder
-        from sklearn.pipeline import Pipeline
-        from sklearn.metrics import accuracy_score
 
-        eval_model = None
-        models = dict(
-            lr=LogisticRegression,
-            rf=RandomForestClassifier,
-            mlp=MLPClassifier
-        )
-        if model in models.keys():
-            eval_model = models[model]()
-        elif hasattr(model, 'fit') and hasattr(model, 'predict'):
-            eval_model = model
-        else:
-            raise Exception(
-                "Invalid Arugument `model`, Should be one of ['lr', 'mlp', 'rf'], or a model class that have sklearn-style `fit` and `predict` method.")
+        models = dict(lr=LogisticRegression, rf=RandomForestClassifier, mlp=MLPClassifier)
+        if model not in models:
+            raise ValueError("model must be one of ['lr','rf','mlp']")
+        eval_model = models[model]()
 
-        synthetic_data = self._sample()
-        synthetic_x, synthetic_y = synthetic_data[:,
-                                                  :-1], synthetic_data[:, -1]
+        synthetic = self._sample()
+        syn_x, syn_y = synthetic[:, :-1], synthetic[:, -1]
+
         x_test = self._ordinal_encoder.transform(x)
         y_test = self._label_encoder.transform(y)
 
         categories = self._d.get_categories()
-        pipline = Pipeline([('encoder', OneHotEncoder(
-            categories=categories, handle_unknown='ignore')), ('model',  eval_model)])
-        pipline.fit(synthetic_x, synthetic_y)
-        pred = pipline.predict(x_test)
+        pipeline = Pipeline([
+            ("encoder", OneHotEncoder(categories=categories, handle_unknown="ignore")),
+            ("model", eval_model),
+        ])
+        pipeline.fit(syn_x, syn_y)
+        pred = pipeline.predict(x_test)
         return accuracy_score(y_test, pred)
 
     def sample(self, size=None, verbose=1) -> np.ndarray:
-        """
-        Generate synthetic data.     
-
-        Parameters
-        ----------
-        size : int or None
-            Size of the data to be generated. set to `None` to make the size equal to the size of the training set.
-
-        verbose : int, default=1
-            Whether to output the log. Use 1 for log output and 0 for complete silence.
-
-        Return:
-        -----------------
-        synthetic_samples : np.ndarray
-            Generated synthetic data.
-        """
-        ordinal_data = self._sample(size, verbose)
-        origin_x = self._ordinal_encoder.inverse_transform(
-            ordinal_data[:, :-1])
-        origin_y = self._label_encoder.inverse_transform(
-            ordinal_data[:, -1]).reshape(-1, 1)
+        ordinal = self._sample(size=size, verbose=verbose)
+        origin_x = self._ordinal_encoder.inverse_transform(ordinal[:, :-1])
+        origin_y = self._label_encoder.inverse_transform(ordinal[:, -1]).reshape(-1, 1)
         return np.hstack([origin_x, origin_y])
 
     def _sample(self, size=None, verbose=1) -> np.ndarray:
-        """
-        Generate synthetic data in ordinal encoding format
-        """
-        if verbose is None or not isinstance(verbose, int):
-            verbose = 1
-        # basic varibles
         d = self._d
         feature_cards = np.array(d.feature_uniques)
-        # ensure sum of each constraint group equals to 1, then re concat the probs
+
         _idxs = np.cumsum([0] + d._kdbe.constraints_.tolist())
-        constraint_idxs = [(_idxs[i], _idxs[i+1]) for i in range(len(_idxs)-1)]
+        constraint_idxs = [(_idxs[i], _idxs[i + 1]) for i in range(len(_idxs) - 1)]
 
         probs = np.exp(self.__gen_weights[0])
         cpd_probs = [probs[start:end, :] for start, end in constraint_idxs]
-        cpd_probs = np.vstack([p/p.sum(axis=0) for p in cpd_probs])
+        cpd_probs = np.vstack([p / p.sum(axis=0) for p in cpd_probs])
 
-        # assign the probs to the full cpd tables
         idxs = np.cumsum([0] + d._kdbe.high_order_feature_uniques_)
-        feature_idxs = [(idxs[i], idxs[i+1]) for i in range(len(idxs)-1)]
+        feature_idxs = [(idxs[i], idxs[i + 1]) for i in range(len(idxs) - 1)]
         have_value_idxs = d._kdbe.have_value_idxs_
+
         full_cpd_probs = []
         for have_value, (start, end) in zip(have_value_idxs, feature_idxs):
-            # (n_high_order_feature_uniques, n_classes)
             cpd_prob_ = cpd_probs[start:end, :]
-            # (n_all_combination) Note: the order is (*parent, variable)
-            have_value_ravel = have_value.ravel()
-            # (n_classes * n_all_combination)
-            have_value_ravel_repeat = np.hstack(
-                [have_value_ravel] * d.num_classes)
-            # (n_classes * n_all_combination) <- (n_classes * n_high_order_feature_uniques)
-            full_cpd_prob_ravel = np.zeros_like(
-                have_value_ravel_repeat, dtype=float)
-            full_cpd_prob_ravel[have_value_ravel_repeat] = cpd_prob_.T.ravel()
-            # (n_classes * n_parent_combinations, n_variable_unique)
-            full_cpd_prob = full_cpd_prob_ravel.reshape(
-                -1, have_value.shape[-1]).T
-            full_cpd_prob = _add_uniform(full_cpd_prob, noise=0)
-            full_cpd_probs.append(full_cpd_prob)
+            hv = have_value.ravel()
+            hv_rep = np.hstack([hv] * d.num_classes)
 
-        # prepare node and edge names
+            full_ravel = np.zeros_like(hv_rep, dtype=float)
+            full_ravel[hv_rep] = cpd_prob_.T.ravel()
+
+            full = full_ravel.reshape(-1, have_value.shape[-1]).T
+            full = _add_uniform(full, noise=0)
+            full_cpd_probs.append(full)
+
         node_names = [str(i) for i in range(d.num_features + 1)]
         edge_names = [(str(i), str(j)) for i, j in d._kdbe.edges_]
         y_name = node_names[-1]
 
-        # create TabularCPD objects
         evidences = d._kdbe.dependencies_
         feature_cpds = [
-            TabularCPD(str(name), feature_cards[name], table,
-                       evidence=[y_name, *[str(e) for e in evidences]],
-                       evidence_card=[d.num_classes, *feature_cards[evidences].tolist()])
-            for (name, evidences), table in zip(evidences.items(), full_cpd_probs)
+            TabularCPD(
+                str(name),
+                feature_cards[name],
+                table,
+                evidence=[y_name, *[str(e) for e in evs]],
+                evidence_card=[d.num_classes, *feature_cards[evs].tolist()],
+            )
+            for (name, evs), table in zip(evidences.items(), full_cpd_probs)
         ]
-        y_probs = (d.class_counts/d.data_size).reshape(-1, 1)
+
+        y_probs = (d.class_counts / d.data_size).reshape(-1, 1)
         y_cpd = TabularCPD(y_name, d.num_classes, y_probs)
 
-        # create kDB model, then sample the data
-        model = DiscreteBayesianNetwork(edge_names)
-        model.add_cpds(y_cpd, *feature_cpds)
-        sample_size = d.data_size if size is None else size
-        result = BayesianModelSampling(model).forward_sample(
-            size=sample_size, show_progress=verbose > 0)
-        sorted_result = result[node_names].values
+        bn = DiscreteBayesianNetwork(edge_names)
+        bn.add_cpds(y_cpd, *feature_cpds)
 
-        return sorted_result
+        sample_size = d.data_size if size is None else int(size)
+        result = BayesianModelSampling(bn).forward_sample(size=sample_size, show_progress=verbose > 0)
+        return result[node_names].values
 
     def _warmup_run(self, epochs, verbose=None):
         d = self._d
         tf.keras.backend.clear_session()
-        ohex = d.get_kdbe_x(self.k)
+
+        ohex = d.get_kdbe_x(self.k, dense_format=True)
         self.constraints = softmax_weight(d.constraint_positions)
+
         elr = get_lr(ohex.shape[1], d.num_classes, self.constraints)
-        history = elr.fit(ohex, d.y, batch_size=self.batch_size,
-                          epochs=epochs, verbose=verbose)
+        elr.fit(ohex, d.y, batch_size=self.batch_size, epochs=int(epochs), verbose=verbose)
         self.__gen_weights = elr.get_weights()
+
         tf.keras.backend.clear_session()
-        return history
 
     def _run_generator(self, loss):
         d = self._d
-        ohex = d.get_kdbe_x(self.k)
+        ohex = d.get_kdbe_x(self.k, dense_format=True)
+
         tf.keras.backend.clear_session()
         model = tf.keras.Sequential()
         model.add(tf.keras.layers.Dense(
-            d.num_classes, input_dim=ohex.shape[1], activation='softmax', kernel_constraint=self.constraints))
-        model.compile(loss=elr_loss(loss), optimizer='adam',
-                      metrics=['accuracy'])
+            d.num_classes,
+            input_dim=ohex.shape[1],
+            activation="softmax",
+            kernel_constraint=self.constraints
+        ))
+        model.compile(loss=elr_loss(loss), optimizer="adam", metrics=["accuracy"])
         model.set_weights(self.__gen_weights)
-        history = model.fit(
-            ohex, d.y, batch_size=self.batch_size, epochs=1, verbose=0)
+
+        model.fit(ohex, d.y, batch_size=self.batch_size, epochs=1, verbose=0)
         self.__gen_weights = model.get_weights()
+
         tf.keras.backend.clear_session()
-        return history
 
     def _discrim(self):
         model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Dense(
-            1, input_dim=self._d.num_features, activation='sigmoid'))
-        model.compile(loss='binary_crossentropy',
-                      optimizer='adam', metrics=['accuracy'])
+        model.add(tf.keras.layers.Dense(1, input_dim=self._d.num_features, activation="sigmoid"))
+        model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
         return model
 
-    def train(self, dataset, size_category='small', *args, **kwargs):
-        # parser = argparse.ArgumentParser(
-        #     description="Train GANBLR and generate synthetic data")
-        # parser.add_argument('--dataset', type=str, required=True,
-        #                     help='Name of the dataset (e.g., adult)')
-        # parser.add_argument('--size_category', type=str, required=True, choices=[
-        #                     'small', 'medium', 'large'], help='Dataset size category (small/medium/large)')
-        # args = parser.parse_args()
 
-        epochs = 150 if size_category == 'large' else 100
+# ============================================================
+# Pipeline Wrapper
+# ============================================================
 
-        model_name = "ganblr"
-        dataset_name = dataset
-        data_dir = f"{dataset_name}"
+@dataclass
+class GANBLRModel:
+    k: int = 1
+    epochs: int = 20
+    batch_size: int = 32
+    warmup_epochs: int = 1
+    seed: int = 42
+    max_synth: int = 5000  # cap synthetic rows to prevent crashes
 
-        # Honor explicit synthetic_dir if provided (pipeline passes this)
-        explicit_synth_dir = kwargs.get('synthetic_dir')
-        if explicit_synth_dir and isinstance(explicit_synth_dir, str):
-            save_dir = explicit_synth_dir
-        else:
-            save_dir = os.path.join("synthetic", dataset_name, model_name)
-        os.makedirs(save_dir, exist_ok=True)
-
-        x_train_path = os.path.join(data_dir, "x_train.csv")
-        y_train_path = os.path.join(data_dir, "y_train.csv")
-
-        # === Set Random Seed for Reproducibility ===
-        seed = 42
-        np.random.seed(seed)
-        random.seed(seed)
-
-        # === Load Training Data ===
-        X = pd.read_csv(x_train_path)
-        y = pd.read_csv(y_train_path).values.ravel()
-        print(f"Loaded X shape: {X.shape}, y shape: {y.shape}")
-
-        self.fit(X, y, k=2, epochs=epochs, batch_size=64)
-
-        syn_data = self.sample(X.shape[0])
-        df_synth = pd.DataFrame(syn_data)
-        x_synth = df_synth.iloc[:, :-1]
-        y_synth = df_synth.iloc[:, -1]
-
-        x_synth.to_csv(os.path.join(save_dir, "x_synth.csv"), index=False)
-        y_synth.to_csv(os.path.join(save_dir, "y_synth.csv"),
-                       index=False, header=True)
-        print(f"\n Synthetic data saved to: {save_dir}")
+    def train(self, dataset: str, synthetic_dir: Optional[str] = None, *args, **kwargs):
+        m = GANBLR()
+        m.train(
+            dataset=dataset,
+            synthetic_dir=synthetic_dir,
+            k=self.k,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            warmup_epochs=self.warmup_epochs,
+            seed=self.seed,
+            max_synth=self.max_synth,
+        )
+        return m

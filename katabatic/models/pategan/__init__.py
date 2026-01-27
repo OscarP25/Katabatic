@@ -1,7 +1,5 @@
-from .models import PATEGAN
+# katabatic/models/pategan/__init__.py
 
-__all__ = ['PATEGAN']
-__version__ = '0.1.0'
+from .pategan_model import PATEGAN
 
-
-
+__all__ = ["PATEGAN"]

@@ -494,3 +494,41 @@ class MultinomialDiffusion(nn.Module):
                 (x_t.shape[0],), t, device=x_t.device, dtype=torch.long)
             x_t = self.p_sample(x_t, t_batch, cond)
         return x_t
+class GaussianDiffusionTrainer(nn.Module):
+    """Gaussian diffusion trainer."""
+
+    def __init__(self, model, beta_1, beta_T, T):
+        super().__init__()
+        self.model = model
+        self.T = T
+
+        betas = torch.linspace(beta_1, beta_T, T)
+        alphas = 1.0 - betas
+        alphas_bar = torch.cumprod(alphas, dim=0)
+
+        self.register_buffer('betas', betas)
+        self.register_buffer('sqrt_alphas_bar', torch.sqrt(alphas_bar))
+        self.register_buffer('sqrt_one_minus_alphas_bar',
+                             torch.sqrt(1 - alphas_bar))
+
+    def make_x_t(self, x_0: torch.Tensor, t: torch.Tensor,
+                 noise: torch.Tensor) -> torch.Tensor:
+        """
+        Build x_t from clean x_0 and noise, using the same formula
+        as in forward().
+        """
+        x_t = (
+            extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
+            extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
+        )
+        return x_t
+
+    def forward(self, x_0, t, cond):
+        """Training step."""
+        noise = torch.randn_like(x_0)
+        x_t = (
+            extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
+            extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise
+        )
+        noise_pred = self.model(x_t, t, cond)
+        return F.mse_loss(noise_pred, noise)

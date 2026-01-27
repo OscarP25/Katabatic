@@ -1,38 +1,37 @@
+# katabatic/models/great/great_trainer.py
+
 import random
 import numpy as np
-
 import torch
 from torch.utils.data import DataLoader
-
 from transformers import Trainer
 
 
 def _seed_worker(_):
-    """
-    Helper function to set worker seed during Dataloader initialization.
-    """
+    """Set deterministic worker seed."""
     worker_seed = torch.initial_seed() % 2**32
     random.seed(worker_seed)
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
-    torch.cuda.manual_seed_all(worker_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(worker_seed)
 
 
 class GReaTTrainer(Trainer):
-    """GReaT Trainer
+    """
+    Custom Trainer for GReaT.
 
-    Overwrites the get_train_dataloader methode of the HuggingFace Trainer to not remove the "unused" columns -
-    they are needed later!
+    IMPORTANT:
+    - Keeps unused columns (do NOT call _remove_unused_columns)
+    - Forces safe DataLoader settings for Windows stability
     """
 
     def get_train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
+            raise ValueError("Trainer requires a train_dataset.")
 
         data_collator = self.data_collator
-        train_dataset = (
-            self.train_dataset
-        )  # self._remove_unused_columns(self.train_dataset, description="training")
+        train_dataset = self.train_dataset
         train_sampler = self._get_train_sampler()
 
         return DataLoader(
@@ -41,7 +40,9 @@ class GReaTTrainer(Trainer):
             sampler=train_sampler,
             collate_fn=data_collator,
             drop_last=self.args.dataloader_drop_last,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
+
+            # 🔒 SAFETY SETTINGS
+            num_workers=0,          # Windows-safe
+            pin_memory=False,       # CPU-friendly
             worker_init_fn=_seed_worker,
         )

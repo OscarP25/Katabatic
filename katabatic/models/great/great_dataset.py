@@ -1,94 +1,79 @@
+# katabatic/models/great/great_dataset.py
+
 import random
 import typing as tp
-import numpy as np
-
-from datasets import Dataset
 from dataclasses import dataclass
+
+import numpy as np
+from datasets import Dataset as HFDataset
 from transformers import DataCollatorWithPadding
 
 
-class GReaTDataset(Dataset):
-    """GReaT Dataset
-
-    The GReaTDataset overwrites the _getitem function of the HuggingFace Dataset Class to include the permutation step.
-
-    Attributes:
-        tokenizer (AutoTokenizer): Tokenizer from HuggingFace
-        float_precision (int, optional): Number of decimal places to use for floating point numbers.
-                                        If None, full precision is used.
+class GReaTDataset:
+    """
+    Wrapper around a HuggingFace Dataset that:
+      - permutes columns per row
+      - converts row to "col is value, ..." text
+      - tokenizes (WITHOUT padding; collator pads)
     """
 
-    def set_tokenizer(self, tokenizer, float_precision=None):
-        """Set the Tokenizer
+    def __init__(self, hf_dataset: HFDataset):
+        self.ds = hf_dataset
+        self.tokenizer = None
+        self.float_precision = None
+        self.column_names = hf_dataset.column_names
 
-        Args:
-            tokenizer: Tokenizer from HuggingFace
-            float_precision: Number of decimal places to use for floating point numbers.
-                           If None, full precision is used.
-        """
+    @classmethod
+    def from_pandas(cls, df):
+        hf = HFDataset.from_pandas(df, preserve_index=False)
+        return cls(hf)
+
+    def set_tokenizer(self, tokenizer, float_precision=None):
         self.tokenizer = tokenizer
         self.float_precision = float_precision
 
-    def _format_value(self, value):
-        """Format a value based on its type.
-        
-        For floats, applies precision formatting if float_precision is set.
-        
-        Args:
-            value: The value to format
-            
-        Returns:
-            Formatted string value
-        """
+    def _format_value(self, value) -> str:
         if isinstance(value, (float, np.floating)) and self.float_precision is not None:
-            # Format to a string with specified decimal places, removing trailing zeros
-            formatted_value_str = f"{value:.{self.float_precision}f}"
-            if '.' in formatted_value_str:
-                formatted_value_str = formatted_value_str.rstrip('0').rstrip('.')
-            return formatted_value_str
+            s = f"{float(value):.{self.float_precision}f}"
+            if "." in s:
+                s = s.rstrip("0").rstrip(".")
+            return s
         return str(value).strip()
 
-    def _getitem(
-        self, key: tp.Union[int, slice, str], decoded: bool = True, **kwargs
-    ) -> tp.Union[tp.Dict, tp.List]:
-        """Get Item from Tabular Data
+    def __len__(self):
+        return len(self.ds)
 
-        Get one instance of the tabular data, permuted, converted to text and tokenized.
-        """
-        # If int, what else?
-        row = self._data.fast_slice(key, 1)
+    def __getitem__(self, idx: int) -> tp.Dict[str, tp.Any]:
+        if self.tokenizer is None:
+            raise RuntimeError("Tokenizer not set. Call set_tokenizer(...) before training.")
 
-        shuffle_idx = list(range(row.num_columns))
-        random.shuffle(shuffle_idx)
+        row = self.ds[idx]  # dict: {col: value}
 
-        shuffled_text = ", ".join(
-            [
-                "%s is %s"
-                % (row.column_names[i], self._format_value(row.columns[i].to_pylist()[0]))
-                for i in shuffle_idx
-            ]
-        )
-        tokenized_text = self.tokenizer(shuffled_text, padding=True)
-        return tokenized_text
+        # shuffle feature order
+        cols = self.column_names.copy()
+        random.shuffle(cols)
 
-    def __getitems__(self, keys: tp.Union[int, slice, str, list]):
-        if isinstance(keys, list):
-            return [self._getitem(key) for key in keys]
-        else:
-            return self._getitem(keys)
+        # build prompt text
+        parts = []
+        for c in cols:
+            parts.append(f"{c} is {self._format_value(row[c])}")
+        text = ", ".join(parts)
+
+        # IMPORTANT: no padding here; collator handles it
+        tokenized = self.tokenizer(text, padding=False, truncation=True)
+        return tokenized
 
 
 @dataclass
 class GReaTDataCollator(DataCollatorWithPadding):
-    """GReaT Data Collator
-
-    Overwrites the DataCollatorWithPadding to also pad the labels and not only the input_ids
+    """
+    Pads inputs and sets labels = input_ids for causal LM fine-tuning.
     """
 
     def __call__(self, features: tp.List[tp.Dict[str, tp.Any]]):
         batch = self.tokenizer.pad(
             features,
-            padding=self.padding,
+            padding=True,
             max_length=self.max_length,
             pad_to_multiple_of=self.pad_to_multiple_of,
             return_tensors=self.return_tensors,

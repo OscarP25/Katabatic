@@ -1,9 +1,10 @@
-# katabatic/models/__init__.py
 """
-Models package: exposes all implemented models (GANs, MedGAN, etc).
+Model package for Katabatic.
+
+Exposes the abstract base Model class and the concrete PATEGAN implementation.
 """
 
 from .base_model import Model
-from .registry import ModelRegistry, get_model, list_models
+from .pategan import PATEGAN  # this refers to katabatic/models/pategan/__init__.py
 
-__all__ = ['Model', 'ModelRegistry', 'get_model', 'list_models', 'TabDDPM']
+__all__ = ["Model", "PATEGAN"]
