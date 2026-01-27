@@ -1,7 +1,5 @@
 import pandas as pd
-import numpy as np
 import os
-import pickle
 from typing import Union, Optional
 from sdv.single_table import TVAESynthesizer
 from sdv.metadata import SingleTableMetadata
@@ -44,14 +42,14 @@ class TVAE(BaseModel):
                     self.target_col = y.columns[0]
                     data[self.target_col] = y.iloc[:,0]
 
-        # Store training data to handle mode collapse in rare classes later
+        # Store training data to handle mode collapse
         self.train_data = data
 
-        # 2. Detect Metadata
+        # 2. Detect metadata
         self.metadata = SingleTableMetadata()
         self.metadata.detect_from_dataframe(data)
 
-        # 3. Initialize & Train
+        # 3. Initialise & train
         self.model = TVAESynthesizer(
             metadata=self.metadata,
             epochs=kwargs.get('epochs', self.epochs),
@@ -61,7 +59,7 @@ class TVAE(BaseModel):
         print(f"Training TVAE on {len(data)} rows...")
         self.model.fit(data)
 
-        # 4. Generate & Save Artifacts
+        # 4. Generate & save artifacts
         synthetic_dir = kwargs.get('synthetic_dir')
         if synthetic_dir:
             n_samples = kwargs.get('n_samples', len(data))
@@ -91,7 +89,7 @@ class TVAE(BaseModel):
         
         synth = self.model.sample(num_rows=n_samples)
 
-        # class recovery for model collapse
+        # class recovery for mode collapse
         if self.train_data is not None and self.target_col is not None:
             real_classes = self.train_data[self.target_col].unique()
             synth_classes = synth[self.target_col].unique()
