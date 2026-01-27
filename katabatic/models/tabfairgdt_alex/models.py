@@ -24,7 +24,7 @@ class TabFairGDT(Model):
     # Default settings
     _defaults = dict(
         lambda_val=0.5,           # 0 = Max Utility, 1 = Max Fairness
-        min_samples_leaf=10,      # Regularization for trees
+        min_samples_leaf=10,      # Regularisation for trees
         protected_attribute=None,  # The sensitive column (e.g., 'sex')
         target_column=None,       # The outcome column (e.g., 'income')
         seed=42,
