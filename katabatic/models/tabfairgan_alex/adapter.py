@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np  # Required for noise generation
+import numpy as np
 import torch
 import os
 from typing import Optional, Dict, Union
@@ -29,14 +29,13 @@ class KatabaticTabFairGAN(BaseModel):
         """
         1. Loads data.
         2. Trains TFG.
-        3. Generates AND splits synthetic data for TSTREvaluation (x_synth.csv, y_synth.csv).
+        3. Generates and splits synthetic data for TSTREvaluation.
         """
-        # --- 1. Data Loading ---
+        # 1. Data Loading
         if isinstance(X, str):
             train_dir = X
             print(f"Loading training data from: {train_dir}")
             try:
-                # skipinitialspace=True fixes " sex" -> "sex"
                 X_df = pd.read_csv(os.path.join(train_dir, 'x_train.csv'), skipinitialspace=True)
                 y_df = pd.read_csv(os.path.join(train_dir, 'y_train.csv'), skipinitialspace=True)
             except FileNotFoundError as e:
@@ -49,19 +48,18 @@ class KatabaticTabFairGAN(BaseModel):
         else:
             self.fit(X, y, **kwargs)
 
-        # --- 2. Auto-Generation for Pipeline Support ---
+        # 2. Auto-Generation for Pipeline Support
         synthetic_dir = kwargs.get('synthetic_dir')
         if synthetic_dir:
             print(f"Pipeline mode: Generating split synthetic artifacts to {synthetic_dir}")
             
-            # Generate samples (n_samples defaults to training set size)
+            # Generate samples
             n_samples = kwargs.get('n_samples', len(self.model.df))
             synthetic_df = self.sample(n_samples)
             
-            # Ensure directory exists
             os.makedirs(synthetic_dir, exist_ok=True)
             
-            # --- CRITICAL FIX: Split X and y for TSTREvaluation ---
+            # Split X and y for TSTREvaluation
             target_col = self.fairness_config.get('Y', 'target')
             
             if target_col in synthetic_df.columns:
@@ -73,7 +71,7 @@ class KatabaticTabFairGAN(BaseModel):
                 y_synth.to_csv(os.path.join(synthetic_dir, 'y_synth.csv'), index=False)
                 print(f"Saved split artifacts: x_synth.csv, y_synth.csv ({len(x_synth)} rows)")
             else:
-                # Fallback if column name mismatch (unlikely with our previous force-rename fix)
+                # Fallback if column name mismatch
                 print(f"Warning: Target '{target_col}' not found in synthetic data. Saving as single file.")
                 synthetic_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
 
@@ -88,11 +86,10 @@ class KatabaticTabFairGAN(BaseModel):
         data = X.copy()
         data.columns = data.columns.str.strip()
         
-        # FIX A: Cast to String (Fixes TFG missing discrete cols)
+        # Cast to String (Fixes TFG missing discrete cols)
         data = data.astype(str)
 
-        # FIX B: Inject Dummy Continuous Column (Fixes TFG QuantileTransformer crash)
-        # We add random noise so TFG finds exactly 1 continuous column.
+        # Inject dummy continuous column (Fixes TFG QuantileTransformer crash)
         data[self._dummy_col] = np.random.randn(len(data))
 
         # 3. Merge Target
@@ -106,7 +103,7 @@ class KatabaticTabFairGAN(BaseModel):
             else:
                 data[target_col] = str(y)
 
-        # 4. Initialize & Train
+        # 4. Initialise & Train
         self.model = TFG(
             df=data,
             epochs=self.epochs,
@@ -116,7 +113,7 @@ class KatabaticTabFairGAN(BaseModel):
         )
 
         print(f"Training TabFairGAN on {self.device} with {len(data.columns)} columns (including dummy)...")
-        self.model.train() #
+        self.model.train()
         self.fitted = True
 
     def sample(self, n_samples: int, **kwargs) -> pd.DataFrame:
@@ -139,8 +136,6 @@ class KatabaticTabFairGAN(BaseModel):
         torch.save(self.model.generator.state_dict(), path)
         
     def load(self, path): 
-        # Note: This load is partial; it won't restore the dummy column logic 
-        # unless fit() is called again.
         self.model.generator.load_state_dict(torch.load(path))
         self.model.generator.eval()
         self.fitted = True

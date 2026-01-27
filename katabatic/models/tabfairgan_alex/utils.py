@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -37,7 +37,6 @@ def get_cont_cat_transform(df: pd.DataFrame) -> Tuple[
     return ohe, scaler, discrete_columns_ordereddict, continuous_columns_list, numerical_array, ohe_array
 
 
-# def get_ohe_data_fair(df: pd.DataFrame, S, Y, S_under, Y_desire):
 def get_ohe_data_fair(
     df: pd.DataFrame,
     S: str,
@@ -91,7 +90,6 @@ def get_ohe_data_fair(
     return ohe, scaler, discrete_columns_ordereddict, continuous_columns_list, final_array, S_start_index, Y_start_index, underpriv_index, priv_index, undesire_index, desire_index
 
 
-# def get_ohe_data_nofair(df: pd.DataFrame):
 def get_ohe_data_nofair(df: pd.DataFrame) -> Tuple[
     OneHotEncoder,
     QuantileTransformer,
@@ -106,7 +104,6 @@ def get_ohe_data_nofair(df: pd.DataFrame) -> Tuple[
     return ohe, scaler, discrete_columns_ordereddict, continuous_columns_list, final_array
 
 
-# def get_original_data(df_transformed, df_orig, ohe, scaler):
 def get_original_data(
     df_transformed: np.ndarray,
     df_orig: pd.DataFrame,
@@ -127,7 +124,6 @@ def get_original_data(
     return pd.concat([df_int, df_cat], axis=1)
 
 
-# def prepare_data_fair(df, batch_size, S, Y, S_under, Y_desire):
 def prepare_data_fair(
     df: pd.DataFrame,
     batch_size: int,
@@ -165,8 +161,6 @@ def prepare_data_fair(
     train_dl = DataLoader(train_ds, batch_size=batch_size, drop_last=True)
     return ohe, scaler, input_dim, discrete_columns, continuous_columns, train_dl, data_train, data_test, S_start_index, Y_start_index, underpriv_index, priv_index, undesire_index, desire_index
 
-# def prepare_data_nofair(df, batch_size):
-
 
 def prepare_data_nofair(df: pd.DataFrame, batch_size: int) -> Tuple[
     OneHotEncoder,
@@ -185,7 +179,7 @@ def prepare_data_nofair(df: pd.DataFrame, batch_size: int) -> Tuple[
     input_dim = df_transformed.shape[1]
 
     X_train, X_test = train_test_split(
-        df_transformed, test_size=0.1, shuffle=True)  # random_state=10)
+        df_transformed, test_size=0.1, shuffle=True)
 
     data_train = X_train.copy()
     data_test = X_test.copy()

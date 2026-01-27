@@ -1,30 +1,10 @@
-"""Implementation of tabfairgan model from
-@article{rajabi2022tabfairgan,
-  title={Tabfairgan: Fair tabular data generation with generative adversarial networks},
-  author={Rajabi, Amirarsalan and Garibay, Ozlem Ozmen},
-  journal={Machine Learning and Knowledge Extraction},
-  volume={4},
-  number={2},
-  pages={488--501},
-  year={2022},
-  publisher={MDPI}
-}"""
-
-import argparse
-from collections import OrderedDict
-
-import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as f
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, QuantileTransformer
-from torch import nn
 from tqdm.auto import tqdm
 
 from .modules import (Critic, FairLossFunc, Generator, get_crit_loss,
                       get_gen_loss, get_gradient, gradient_penalty)
-from .utils import (get_ohe_data_fair, get_ohe_data_nofair, get_original_data,
+from .utils import (get_original_data,
                     prepare_data_fair, prepare_data_nofair)
 
 display_step = 50
@@ -121,19 +101,16 @@ class TFG:
         with tqdm(total=self.epochs, desc="Training Progress", ncols=100) as pbar:
             for i in range(self.epochs):
                 print("epoch {}".format(i + 1))
-                ############################
                 if i + 1 <= (self.epochs - self.fair_epochs):
                     pbar.set_postfix_str("Training for accuracy")
-                    # print("training for accuracy")
                 if i + 1 > (self.epochs - self.fair_epochs):
                     pbar.set_postfix_str("Training for fairness")
-                    # print("training for fairness")
                 for data in self.train_dl:
                     data[0] = data[0].to(self.device)
                     crit_repeat = 4
                     mean_iteration_critic_loss = 0
                     for k in range(crit_repeat):
-                        # training the critic
+                        # train critic
                         self.crit_optimizer.zero_grad()
                         fake_noise = torch.randn(
                             size=(
@@ -160,13 +137,12 @@ class TFG:
                         mean_iteration_critic_loss += crit_loss.item() / crit_repeat
                         crit_loss.backward(retain_graph=True)
                         self.crit_optimizer.step()
-                    #############################
+
                     if cur_step > 50:
                         critic_losses += [mean_iteration_critic_loss]
 
-                    #############################
                     if i + 1 <= (self.epochs - self.fair_epochs):
-                        # training the generator for accuracy
+                        # train generator
                         self.gen_optimizer.zero_grad()
                         fake_noise_2 = torch.randn(
                             size=(
@@ -179,10 +155,8 @@ class TFG:
                         gen_loss = get_gen_loss(crit_fake_pred)
                         gen_loss.backward()
 
-                        # Update the weights
                         self.gen_optimizer.step()
 
-                    ###############################
                     if i + 1 > (self.epochs - self.fair_epochs):
                         # training the generator for fairness
                         self.gen_optimizer_fair.zero_grad()
