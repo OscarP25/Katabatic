@@ -43,14 +43,24 @@ accelerate = ">=0.26.0"
 tensorflow-io = "0.31.0"
 
 [tool.poetry.extras]
+arf = ["pandas", "scipy"]
+copulagan = ["pandas", "sdv"]
+decaf = ["torch", "pandas", "networkx", "tqdm"]
+fairtabdiffusion = ["torch", "pandas", "tqdm"]
+forestdiffusion = ["pandas", "pickle", "ForestDiffusion"]
 ganblr = ["tensorflow", "pgmpy", "pyitlib", "tf-keras", "scipy"]
 great = ["transformers", "torch", "datasets"]
 tabddpm = ["torch", "scipy", "rtdl_revisiting_models", "libzero", "category-encoders"]
+tabfairgan = ["torch", "pandas", "tqdm"]
+tabfairgdt = ["torch", "pandas"]
 pategan = ["tensorflow", "scipy"]
+privbayes = ["pandas", "DataSynthesizer"]
 codi = ["torch"]
 medgan = ["torch"]
 dev = ["ipykernel", "pytest", "pytest-cov", "pytest-mock"]
 ctgan = ["torch"]
+tvae = ["pandas", "sdv"]
+vfae = ["torch", "pandas", "tqdm"]
 
 # TabSyn stack
 tabsyn = ["torch", "scipy", "tqdm", "category-encoders", "tomli", "tomli-w"]
