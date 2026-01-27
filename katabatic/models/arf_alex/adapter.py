@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import os
 from typing import Union, Optional
 from katabatic.models.base_model import Model as BaseModel
@@ -46,7 +45,7 @@ class KatabaticARF(BaseModel):
                 x_synth = synth_df.drop(columns=[target_name])
                 x_synth.to_csv(os.path.join(synthetic_dir, 'x_synth.csv'), index=False)
                 y_synth.to_csv(os.path.join(synthetic_dir, 'y_synth.csv'), index=False)
-                print(f"Saved artifacts.")
+                print("Saved artifacts.")
             else:
                 synth_df.to_csv(os.path.join(synthetic_dir, 'synthetic.csv'), index=False)
 

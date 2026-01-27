@@ -10,8 +10,8 @@ class arf:
   def __init__(self, x,  num_trees = 30, delta = 0,  max_iters =10, early_stop = True, verbose = False, min_node_size = 5, **kwargs):
 
     # assertions
-    assert isinstance(x, pd.core.frame.DataFrame), f"expected pandas DataFrame"
-    assert len(set(list(x))) == x.shape[1], f"duplicate column names"
+    assert isinstance(x, pd.core.frame.DataFrame), "expected pandas DataFrame"
+    assert len(set(list(x))) == x.shape[1], "duplicate column names"
     
     # initialize values (Reset index to prevent alignment errors)
     x_real = x.copy().reset_index(drop=True)
@@ -71,7 +71,7 @@ class arf:
         tmp = pd.Series(tmp.value_counts(sort=False), name='cnt').reset_index()
         draw_from = pd.merge(left=tmp, right=x_real_obs, on=['tree', 'leaf'], sort=False)
 
-        # Robust Synthetic Generation
+        # Synthetic generation step
         grpd = draw_from.groupby(['tree', 'leaf'])
         x_synth_dfs = []
         
@@ -103,7 +103,8 @@ class arf:
         iters += 1
         
         plateau = True if early_stop and acc[iters] > acc[iters - 1] else False
-        if verbose: print(f"Iter {iters}: acc {acc_1}")
+        if verbose:
+          print(f"Iter {iters}: acc {acc_1}")
         
         if (acc_1 <= 0.5 + delta or iters >= max_iters or plateau):
           converged = True
@@ -113,7 +114,7 @@ class arf:
     self.clf = clf_0
     self.acc = acc 
         
-    # Pruning (Fixed np.in1d -> np.isin)
+    # Pruning
     pred = self.clf.apply(self.x_real)
     for tree_num in range(0, self.num_trees):
       tree = self.clf.estimators_[tree_num]
@@ -202,7 +203,7 @@ class arf:
           long.loc[long['min'] == float('-inf') , 'min'] = 0.5 - 1
           long.loc[long['max'] == float('inf') , 'max'] = long['k'] + 0.5 - 1
           
-          # Vectorized Boolean Masking
+          # Boolean masking
           min_mod = np.round(long['min'] % 1, 2)
           max_mod = np.round(long['max'] % 1, 2)
           
@@ -220,7 +221,7 @@ class arf:
           tmp['levels'] = tmp.apply(lambda row: list(range(int(row['rep_min']), int(row['rep_max'] + 1))), axis=1)
           tmp = tmp.explode('levels')
           
-          # Robust concatenation for variable-length categories
+          # Concatenation for variable-length categories
           cat_val_list = [pd.DataFrame({'variable': col, 'value': self.levels[col]}) for col in self.levels]
           cat_val = pd.concat(cat_val_list, ignore_index=True)
           cat_val['levels'] = cat_val['value']
@@ -261,7 +262,6 @@ class arf:
     for j in range(self.p): 
       colname = self.orig_colnames[j]
       
-      # Use iloc[j] for positional access
       if self.factor_cols.iloc[j]:
         data_new.isetitem(j, obs_probs[obs_probs["variable"] == colname].groupby("obs").sample(weights="prob")["value"].reset_index(drop=True))
       else:
@@ -279,8 +279,6 @@ class arf:
     # Convert categories back to category   
     for col in self.orig_colnames:
       if self.factor_cols[col]:
-        # --- FIX: STRICT INTEGER CASTING FOR FROM_CODES ---
-        # Ensure codes are integers (handle floats/NaNs safely)
         codes = data_new[col].fillna(-1).astype(int)
         data_new[col] = pd.Categorical.from_codes(codes, categories=self.levels[col])
 

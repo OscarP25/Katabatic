@@ -5,7 +5,7 @@ def bnd_fun(tree, p, forest, feature_names):
     my_tree = forest.estimators_[tree].tree_
     num_nodes = my_tree.node_count
     
-    # Initialize bounds
+    # Initialise lower and upper bounds
     lb = np.full(shape=(num_nodes, p), fill_value=float('-inf'))
     ub = np.full(shape=(num_nodes, p), fill_value=float('inf'))
     
@@ -24,11 +24,7 @@ def bnd_fun(tree, p, forest, feature_names):
 
     leaves = np.nonzero(my_tree.children_left < 0)[0]
     n_leaves = len(leaves)
-    
-    # --- TROUBLESHOOTING FIX: Force flat lists ---
-    # numpy arrays of shape (N,) and (N,1) can cause "length" errors in loose dicts.
-    # .flatten().tolist() ensures we have simple 1D python lists.
-    
+      
     l_data = {
         'tree': np.full(n_leaves, tree).flatten().tolist(), 
         'leaf': leaves.flatten().tolist()
