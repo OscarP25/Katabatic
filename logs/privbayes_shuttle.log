@@ -1,0 +1,65 @@
+Preprocessing: raw_data/shuttle.csv
+Saved preprocessed discrete dataset to: discretized_data/shuttle.csv
+Starting pipeline for privbayes on shuttle
+Loaded data with shape: (58000, 10)
+Saved train/test full data
+Train size: (46400, 10), Test size: (11600, 10)
+Train label distribution:
+ class
+0    0.785970
+3    0.153491
+4    0.056336
+2    0.002953
+1    0.000862
+6    0.000216
+5    0.000172
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.785948
+3    0.153534
+4    0.056293
+2    0.002931
+1    0.000862
+6    0.000259
+5    0.000172
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (46400, 9) (46400,)
+Test shape: (11600, 9) (11600,)
+Loading PrivBayes data from: sample_data/shuttle
+Training PrivBayes (epsilon=1.0, k=2) on 46400 rows...
+================ Constructing Bayesian Network (BN) ================
+Adding ROOT col_a6
+Adding attribute col_a7
+Adding attribute col_a8
+Adding attribute col_a4
+Adding attribute col_time
+Adding attribute col_a2
+Adding attribute col_class
+Adding attribute col_a1
+Adding attribute col_a5
+Adding attribute col_a3
+========================== BN constructed ==========================
+PrivBayes description saved to synthetic/shuttle/privbayes/description.json
+Generating synthetic data to: synthetic/shuttle/privbayes
+
+Results saved to: Results/shuttle/privbayes_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.9302
+F1 Score: 0.9232
+
+MLP:
+Accuracy: 0.9961
+F1 Score: 0.9955
+
+RF:
+Accuracy: 0.9890
+F1 Score: 0.9904
+
+XGBoost:
+Accuracy: 0.9961
+F1 Score: 0.9958

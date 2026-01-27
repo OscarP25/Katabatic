@@ -1,0 +1,56 @@
+Preprocessing: raw_data/car.csv
+Saved preprocessed discrete dataset to: discretized_data/car.csv
+Starting pipeline for privbayes on car
+Loaded data with shape: (1728, 7)
+Saved train/test full data
+Train size: (1382, 7), Test size: (346, 7)
+Train label distribution:
+ 6
+2    0.700434
+0    0.222142
+1    0.039797
+3    0.037627
+Name: proportion, dtype: float64
+Test label distribution:
+ 6
+2    0.699422
+0    0.222543
+1    0.040462
+3    0.037572
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (1382, 6) (1382,)
+Test shape: (346, 6) (346,)
+Loading PrivBayes data from: sample_data/car
+Training PrivBayes (epsilon=1.0, k=2) on 1382 rows...
+================ Constructing Bayesian Network (BN) ================
+Adding ROOT col_6
+Adding attribute col_3
+Adding attribute col_5
+Adding attribute col_2
+Adding attribute col_1
+Adding attribute col_0
+Adding attribute col_4
+========================== BN constructed ==========================
+PrivBayes description saved to synthetic/car/privbayes/description.json
+Generating synthetic data to: synthetic/car/privbayes
+
+Results saved to: Results/car/privbayes_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.6908
+F1 Score: 0.5900
+
+MLP:
+Accuracy: 0.7081
+F1 Score: 0.6950
+
+RF:
+Accuracy: 0.6561
+F1 Score: 0.6554
+
+XGBoost:
+Accuracy: 0.6416
+F1 Score: 0.6509

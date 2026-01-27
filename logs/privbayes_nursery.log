@@ -1,0 +1,59 @@
+Preprocessing: raw_data/nursery.csv
+Saved preprocessed discrete dataset to: discretized_data/nursery.csv
+Starting pipeline for privbayes on nursery
+Loaded data with shape: (12960, 9)
+Saved train/test full data
+Train size: (10368, 9), Test size: (2592, 9)
+Train label distribution:
+ 8
+0    0.333333
+1    0.329186
+3    0.312018
+4    0.025270
+2    0.000193
+Name: proportion, dtype: float64
+Test label distribution:
+ 8
+0    0.333333
+1    0.329090
+3    0.312114
+4    0.025463
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (10368, 8) (10368,)
+Test shape: (2592, 8) (2592,)
+Loading PrivBayes data from: sample_data/nursery
+Training PrivBayes (epsilon=1.0, k=2) on 10368 rows...
+================ Constructing Bayesian Network (BN) ================
+Adding ROOT col_6
+Adding attribute col_4
+Adding attribute col_7
+Adding attribute col_8
+Adding attribute col_1
+Adding attribute col_2
+Adding attribute col_3
+Adding attribute col_0
+Adding attribute col_5
+========================== BN constructed ==========================
+PrivBayes description saved to synthetic/nursery/privbayes/description.json
+Generating synthetic data to: synthetic/nursery/privbayes
+
+Results saved to: Results/nursery/privbayes_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7596
+F1 Score: 0.7514
+
+MLP:
+Accuracy: 0.8877
+F1 Score: 0.8784
+
+RF:
+Accuracy: 0.8495
+F1 Score: 0.8456
+
+XGBoost:
+Accuracy: 0.8607
+F1 Score: 0.8582

@@ -1,0 +1,64 @@
+Preprocessing: raw_data/adult.csv
+Saved preprocessed discrete dataset to: discretized_data/adult.csv
+Starting pipeline for privbayes on adult
+Loaded data with shape: (32561, 15)
+Saved train/test full data
+Train size: (26048, 15), Test size: (6513, 15)
+Train label distribution:
+ class
+0    0.759175
+1    0.240825
+Name: proportion, dtype: float64
+Test label distribution:
+ class
+0    0.759251
+1    0.240749
+Name: proportion, dtype: float64
+Saved X/y split
+Training shape: (26048, 14) (26048,)
+Test shape: (6513, 14) (6513,)
+Loading PrivBayes data from: sample_data/adult
+Training PrivBayes (epsilon=1.0, k=2) on 26048 rows...
+================ Constructing Bayesian Network (BN) ================
+Adding ROOT col_native-country
+Adding attribute col_race
+Adding attribute col_relationship
+Adding attribute col_marital-status
+Adding attribute col_sex
+Adding attribute col_age
+Adding attribute col_class
+Adding attribute col_occupation
+Adding attribute col_education-num
+Adding attribute col_education
+Adding attribute col_workclass
+Adding attribute col_hours-per-week
+Adding attribute col_capital-gain
+Adding attribute col_capital-loss
+Adding attribute col_fnlwgt
+========================== BN constructed ==========================
+PrivBayes description saved to synthetic/adult/privbayes/description.json
+Generating synthetic data to: synthetic/adult/privbayes
+
+Results saved to: Results/adult/privbayes_tstr.csv
+
+TSTR Evaluation Results:
+
+LR:
+Accuracy: 0.7593
+F1 Score: 0.6553
+AUC: 0.7344
+
+MLP:
+Accuracy: 0.7565
+F1 Score: 0.7016
+AUC: 0.7760
+
+RF:
+Accuracy: 0.7368
+F1 Score: 0.7276
+AUC: 0.7634
+
+XGBoost:
+Accuracy: 0.7155
+F1 Score: 0.7358
+AUC: 0.7777
