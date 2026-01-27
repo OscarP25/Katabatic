@@ -1,6 +1,6 @@
 # DECAF: Generating Fair Synthetic Data Using Causally-Aware Generative Networks
 
-DECFA is a causal generative model that uses directed acyclic graphs to generate fair synthetic data and enable inference of counterfactual fairness.
+DECAF is a causal generative model that uses directed acyclic graphs to generate fair synthetic data and enable inference of counterfactual fairness.
 
 ## Paper
 
