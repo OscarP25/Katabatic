@@ -2,14 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from typing import List
 from .utils import (
     get_named_beta_schedule, log_add_exp, log_1_min_a, extract, 
-    index_to_log_onehot, ohe_to_categories, sum_except_batch, 
-    mean_flat, normal_kl, log_categorical, timestep_embedding
+    index_to_log_onehot, ohe_to_categories, timestep_embedding
 )
-
-# --- Components ---
 
 class ResBlock(nn.Module):
     def __init__(self, n_in_channels, d_t_emb, n_out_channels=None, n_groups=32):
@@ -41,36 +37,34 @@ class TimestepEmbedSequential(nn.Sequential):
             else: x = layer(x)
         return x
 
-# --- Robust U-Net Architecture ---
 
 class Unet(nn.Module):
     def __init__(self, n_in_channels, n_out_channels, n_base_channels, n_channels_factors, n_res_blocks, d_t_emb, d_cond_emb, n_groups=8):
         super().__init__()
         self.n_in_channels = n_in_channels
         
-        # Initial Convolution
         self.init_conv = TimestepEmbedSequential(nn.Conv2d(n_in_channels, n_base_channels, 3, 1, 1))
         
         curr_channels = n_base_channels
         
-        # Downsampling Path
+        # Downsampling
         self.down_levels = nn.ModuleList()
         for factor in n_channels_factors:
             out_channels = n_base_channels * factor
             level_blocks = nn.ModuleList()
             
-            # 1. Residual Blocks (Features to be skipped)
+            # 1. Residual Blocks
             for _ in range(n_res_blocks):
                 level_blocks.append(TimestepEmbedSequential(
                     ResBlock(curr_channels, d_t_emb, out_channels, n_groups)
                 ))
                 curr_channels = out_channels
             
-            # 2. Downsample (Features passed to next level, NOT skipped)
+            # 2. Downsample
             level_blocks.append(TimestepEmbedSequential(nn.Conv2d(curr_channels, curr_channels, 3, 2, 1)))
             self.down_levels.append(level_blocks)
 
-        # Middle Block (Bottleneck)
+        # Bottleneck
         self.middle_block = TimestepEmbedSequential(
             ResBlock(curr_channels, d_t_emb, curr_channels, n_groups),
             ResBlock(curr_channels, d_t_emb, curr_channels, n_groups)
@@ -78,20 +72,11 @@ class Unet(nn.Module):
         
         # Upsampling Path
         self.up_levels = nn.ModuleList()
-        for factor in reversed(n_channels_factors):
-            # Target output channels for this level
-            # Note: We work backwards. The output of this level matches the input of the corresponding down level.
-            # But for simplicity in construction, we look at the factors.
-            # We want to reduce channels back.
-            
-            # Logic: Input is `curr_channels` (from deep). 
-            # We concat with skip (also `curr_channels` roughly).
-            # Output should ideally go back to `n_base_channels * factor`.
-            
+        for factor in reversed(n_channels_factors):         
             out_channels = n_base_channels * factor
             level_blocks = nn.ModuleList()
             
-            # 1. Upsample first
+            # 1. Upsample
             level_blocks.append(TimestepEmbedSequential(
                 nn.Upsample(scale_factor=2, mode='nearest'),
                 nn.Conv2d(curr_channels, curr_channels, 3, 1, 1)
@@ -99,10 +84,6 @@ class Unet(nn.Module):
             
             # 2. Residual Blocks with Concatenation
             for _ in range(n_res_blocks):
-                # Input channels = curr + skip (skip size is same as out_channels of this level in down path)
-                # Actually, skip size is what we produced in the down path: `out_channels`.
-                # Current size is also `curr_channels`.
-                # We map to `out_channels`.
                 level_blocks.append(TimestepEmbedSequential(
                     ResBlock(curr_channels + out_channels, d_t_emb, out_channels, n_groups)
                 ))
@@ -110,8 +91,7 @@ class Unet(nn.Module):
                 
             self.up_levels.append(level_blocks)
         
-        # Final resolution blocks (after last upsample level)
-        # Skip connection from Init Conv
+        # Final resolution blocks
         self.final_res = TimestepEmbedSequential(
             ResBlock(curr_channels + n_base_channels, d_t_emb, n_base_channels, n_groups)
         )
@@ -156,7 +136,6 @@ class Unet(nn.Module):
         
         return self.out_layers(x)
 
-# --- Wrapper & Diffusion Logic ---
 
 class DenoiseFn(nn.Module):
     def __init__(self, input_dim, d_t_emb, d_cond_emb, n_channels=32):

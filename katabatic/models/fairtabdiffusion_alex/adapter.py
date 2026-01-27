@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import torch
 import os
-from typing import Union, Optional, Dict, List
+from typing import Union, Optional
 from torch.utils.data import DataLoader, TensorDataset
 from katabatic.models.base_model import Model as BaseModel
 from .models import FairTabDiffusion
@@ -15,9 +15,9 @@ class KatabaticFairTabDiffusion(BaseModel):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = None
         
-        # Metadata storage
+        # internal storage
         self.columns = []
-        self.columns_x = [] # Feature columns only
+        self.columns_x = []
         self.target_col = None
         self.y_dist = None
         self.y_values = None
@@ -30,7 +30,6 @@ class KatabaticFairTabDiffusion(BaseModel):
         if isinstance(X, str):
             print(f"Loading FairTabDiffusion data from: {X}")
             try:
-                # skipinitialspace=True is crucial for 'adult' dataset headers
                 X_df = pd.read_csv(os.path.join(X, 'x_train.csv'), skipinitialspace=True)
                 y_df = pd.read_csv(os.path.join(X, 'y_train.csv'), skipinitialspace=True)
             except FileNotFoundError as e:
@@ -91,11 +90,6 @@ class KatabaticFairTabDiffusion(BaseModel):
         self.columns = self.columns_x + [self.target_col]
         
         # 3. Calculate Cardinalities (for Multinomial Diffusion)
-        # We assume data is integer-encoded (0, 1, 2...)
-        # We need cardinalities for X features AND Y target (since diffusion models Y too via cond/joint)
-        # Actually, in this specific implementation, we model X features via diffusion 
-        # and condition on Y. So we need cardinalities for X.
-        
         col_cardinalities = []
         for col in self.columns_x:
             max_val = int(X[col].max())
@@ -104,14 +98,15 @@ class KatabaticFairTabDiffusion(BaseModel):
         # 4. Prepare Tensors
         x_tensor = torch.from_numpy(X.values.astype(np.int64))
         y_tensor = torch.from_numpy(y.values.astype(np.int64))
-        if y_tensor.ndim == 2: y_tensor = y_tensor.squeeze()
+        if y_tensor.ndim == 2:
+            y_tensor = y_tensor.squeeze()
 
         dataset = TensorDataset(x_tensor, y_tensor)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-        # 5. Initialize Model
+        # 5. Initialise Model
         epochs = kwargs.get('epochs', self.epochs)
-        print(f"Initializing FairTabDiffusion (Features:{len(self.columns_x)}, Epochs:{epochs})...")
+        print(f"Initialising FairTabDiffusion (Features:{len(self.columns_x)}, Epochs:{epochs})...")
         
         self.model = FairTabDiffusion(
             num_classes=col_cardinalities,
@@ -123,7 +118,6 @@ class KatabaticFairTabDiffusion(BaseModel):
         self.model.train(loader, epochs=epochs)
         
         # 7. Store Label Distribution for Sampling
-        # We sample Y from marginal p(y) and generate X|Y
         if isinstance(y, (pd.Series, pd.DataFrame)):
             vals = y.values.flatten() if isinstance(y, pd.DataFrame) else y.values
             unique, counts = np.unique(vals, return_counts=True)
@@ -142,7 +136,6 @@ class KatabaticFairTabDiffusion(BaseModel):
         y_samples = np.random.choice(self.y_values, size=n_samples, p=self.y_dist)
         
         # 2. Generate Features (X) given Y
-        # Calls the renamed 'sample' method on the inner model
         x_gen = self.model.sample(n_samples, y_samples)
         
         # 3. Construct DataFrame
@@ -157,5 +150,4 @@ class KatabaticFairTabDiffusion(BaseModel):
             self.model.save(path)
 
     def load(self, path: str):
-        # Requires re-initialization of structure first in fit()
         pass

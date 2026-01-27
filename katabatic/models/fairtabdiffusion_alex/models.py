@@ -1,7 +1,6 @@
 import torch
 import torch.optim as optim
 import numpy as np
-import os
 from tqdm.auto import tqdm
 from .modules import DenoiseFn, GaussianMultinomialDiffusion
 
@@ -10,7 +9,7 @@ class FairTabDiffusion:
         self.device = device
         self.num_classes = num_classes # List of cardinalities for each column
         
-        # Calculate input dim (sum of one-hot lengths)
+        # Calculate input dim
         self.input_dim_ohe = sum(num_classes)
         
         self.denoise_fn = DenoiseFn(
@@ -54,18 +53,15 @@ class FairTabDiffusion:
                 
                 pbar.set_postfix({'loss': avg_loss})
 
-    # Renamed from generate -> sample to match common APIs
     def sample(self, n_samples, cond_labels):
         self.diffusion.eval()
         cond = torch.tensor(cond_labels).to(self.device)
         
-        # Generate
         samples = self.diffusion.sample(n_samples, cond)
         return samples.cpu().numpy()
 
-    # --- Compliance Methods (in case of inheritance) ---
     def evaluate(self, X, y=None, **kwargs):
-        return {} # Placeholder
+        return {}
 
     def save(self, path):
         torch.save(self.diffusion.state_dict(), path)
