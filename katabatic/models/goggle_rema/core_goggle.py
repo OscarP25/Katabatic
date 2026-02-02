@@ -1,15 +1,8 @@
-# ======================================================
-# core_goggle.py
-# GOGGLE architecture (paper-faithful)
-# ======================================================
+
 
 import torch
 from torch import nn, Tensor
 from typing import Optional, Tuple, Union
-
-# =========================
-# Graph libs
-# =========================
 import dgl
 from dgl.nn import GraphConv, SAGEConv
 from torch_geometric.utils import dense_to_sparse
@@ -18,9 +11,6 @@ from torch_geometric.nn.inits import glorot, zeros
 from torch_geometric.typing import Adj, OptTensor
 from torch_sparse import SparseTensor, masked_select_nnz, matmul
 
-# ======================================================
-# Encoder
-# ======================================================
 class Encoder(nn.Module):
     def __init__(self, input_dim, encoder_dim, encoder_l, device):
         super().__init__()
@@ -46,9 +36,7 @@ class Encoder(nn.Module):
         z = self.reparameterize(mu, logvar)
         return z, (mu, logvar)
 
-# ======================================================
-# Learned Graph
-# ======================================================
+
 class LearnedGraph(nn.Module):
     def __init__(self, input_dim, graph_prior, prior_mask, threshold, device):
         super().__init__()
@@ -80,9 +68,6 @@ class LearnedGraph(nn.Module):
 
         return g
 
-# ======================================================
-# Graph Input Processors
-# ======================================================
 class GraphInputProcessorHomo(nn.Module):
     def __init__(self, input_dim, decoder_dim, het_encoding, device):
         super().__init__()
@@ -146,9 +131,6 @@ class GraphInputProcessorHet(nn.Module):
 
         return z, edge_index, edge_weight, edge_types
 
-# ======================================================
-# RGCNConv (unchanged from paper)
-# ======================================================
 class RGCNConv(MessagePassing):
     def __init__(self, in_channels, out_channels, num_relations, root_weight=True):
         super().__init__(aggr="mean")
@@ -172,9 +154,7 @@ class RGCNConv(MessagePassing):
             out += x @ self.root
         return out + self.bias
 
-# ======================================================
-# Graph Decoders
-# ======================================================
+
 class GraphDecoderHomo(nn.Module):
     def __init__(self, dim, layers, arch):
         super().__init__()
@@ -207,9 +187,6 @@ class GraphDecoderHet(nn.Module):
             z = layer(z, ei, et, ew)
         return z.view(b, -1)
 
-# ======================================================
-# Main GOGGLE Model
-# ======================================================
 class Goggle(nn.Module):
     def __init__(
         self,
@@ -228,7 +205,11 @@ class Goggle(nn.Module):
         super().__init__()
 
         self.encoder = Encoder(input_dim, encoder_dim, encoder_l, device)
-        self.graph = LearnedGraph(input_dim, graph_prior, prior_mask, threshold, device)
+
+        # 🔧 FIX: explicit learned_graph name
+        self.learned_graph = LearnedGraph(
+            input_dim, graph_prior, prior_mask, threshold, device
+        )
 
         if decoder_arch == "het":
             n_edge_types = input_dim * input_dim
@@ -244,20 +225,18 @@ class Goggle(nn.Module):
 
     def forward(self, x, iteration):
         z, (mu, logvar) = self.encoder(x)
-        adj = self.graph(iteration)
+        adj = self.learned_graph(iteration)
         g_in = self.processor(z, adj)
         x_hat = self.decoder(g_in, x.size(0))
         return x_hat, adj, mu, logvar
 
     def sample(self, n):
-        z = torch.randn(n, self.encoder.mu.out_features, device=self.graph.device)
-        adj = self.graph(100)
+        z = torch.randn(n, self.encoder.mu.out_features, device=self.learned_graph.device)
+        adj = self.learned_graph(100)
         g_in = self.processor(z, adj)
         return self.decoder(g_in, n)
 
-# ======================================================
-# Loss
-# ======================================================
+
 class GoggleLoss(nn.Module):
     def __init__(self, alpha, beta, graph_prior, device):
         super().__init__()
