@@ -2,7 +2,7 @@
 LR,Accuracy,0.7763
 LR,F1 Score,0.7759
 LR,AUC,0.8056
-MLP, ,0.7192
+MLP,Accuracy,0.7192
 MLP,F1 Score,0.7255
 MLP,AUC,0.8179
 RF,Accuracy,0.6774
